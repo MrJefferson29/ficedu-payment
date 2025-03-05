@@ -5,7 +5,7 @@ require("dotenv").config();
 
 if (!process.env.TRANZAK_APP_ID || !process.env.TRANZAK_APP_KEY) {
   console.error("❌ Missing Tranzak credentials in environment variables.");
-  process.exit(1); // Terminate if credentials are missing
+  process.exit(1);
 }
 
 const client = new tranzak({
@@ -28,13 +28,19 @@ exports.processPayment = async (req, res) => {
       return res.status(404).json({ error: "User not found. Payment cannot be processed." });
     }
 
+    // 🔥 Generate Unique Reference
+    const mchTransactionRef = shortUUID.generate();
+
+    // 🔥 Store Transaction Reference in the User Record
+    await User.findByIdAndUpdate(user._id, { mchTransactionRef }, { new: true });
+
     // 🔥 Initiate Mobile Money Payment
     const transaction = await client.payment.collection.simple.chargeMobileMoney({
       amount,
       currencyCode: "XAF",
       description,
       payerNote: description,
-      mchTransactionRef: shortUUID.generate(),
+      mchTransactionRef,
       mobileWalletNumber,
     });
 
@@ -54,7 +60,6 @@ exports.processPayment = async (req, res) => {
     if (status === "SUCCESSFUL" || status === "COMPLETED") {
       console.log("✅ Transaction successful. Transaction ID:", transactionId);
 
-      // ✅ Update User Payment Status
       await User.findByIdAndUpdate(user._id, { paid: true, transactionId }, { new: true });
 
       return res.status(200).json({
@@ -108,33 +113,30 @@ exports.tranzakWebhook = async (req, res) => {
 
     // ✅ Extract Transaction Details
     const transactionId = resource.transactionId || resource.requestId;
-    const mobileWalletNumber = resource.mobileWalletNumber || resource.payer?.accountId || null;
+    const mchTransactionRef = resource.mchTransactionRef || null;
 
-    if (!mobileWalletNumber) {
-      console.error("❌ Missing mobile wallet number in webhook data:", resource);
-      return res.status(400).json({ error: "Invalid webhook payload: missing mobileWalletNumber" });
+    if (!mchTransactionRef) {
+      console.error("❌ Missing transaction reference in webhook data:", resource);
+      return res.status(400).json({ error: "Invalid webhook payload: missing mchTransactionRef" });
     }
 
-    // ✅ Check if Transaction is Already Processed
-    const existingUser = await User.findOne({ transactionId });
-    if (existingUser?.paid) {
+    // ✅ Find User Using `mchTransactionRef`
+    const user = await User.findOne({ mchTransactionRef });
+    if (!user) {
+      console.error(`❌ No user found for mchTransactionRef: ${mchTransactionRef}`);
+      return res.status(404).json({ error: "User not found for transaction." });
+    }
+
+    // ✅ Ensure Transaction is Not Already Processed
+    if (user.paid) {
       console.log(`✅ Transaction ${transactionId} already processed.`);
       return res.status(200).json({ message: "Transaction already processed" });
     }
 
     // ✅ Process Successful Payments
     if (resource.status === "SUCCESSFUL" || resource.status === "COMPLETED") {
-      const updatedUser = await User.findOneAndUpdate(
-        { phone: mobileWalletNumber },
-        { paid: true, transactionId },
-        { new: true }
-      );
-
-      if (updatedUser) {
-        console.log(`✅ Webhook: User ${updatedUser.email} marked as paid.`);
-      } else {
-        console.error("❌ User not found for phone:", mobileWalletNumber);
-      }
+      await User.findByIdAndUpdate(user._id, { paid: true, transactionId }, { new: true });
+      console.log(`✅ Webhook: User ${user.email} marked as paid.`);
     } else {
       console.log("⚠️ Webhook received non-success status:", resource.status);
     }
