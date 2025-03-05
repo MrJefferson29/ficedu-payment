@@ -24,36 +24,30 @@ exports.processPayment = async (req, res) => {
       return res.status(400).json({ error: "Missing required fields." });
     }
 
-    // ✅ Generate Unique Reference BEFORE Using It
-    const mchTransactionRef = shortUUID.generate();
-
     // ✅ Verify User Exists
     const user = await User.findOne({ email });
     if (!user) {
       return res.status(404).json({ error: "User not found. Payment cannot be processed." });
     }
 
-    // ✅ Store Transaction Reference & Amount in User BEFORE Initiating Payment
-    const updatedUser = await User.findByIdAndUpdate(
-      user._id,
-      { mchTransactionRef, amount },
-      { new: true }
-    );
+    // ✅ Generate Unique Reference BEFORE Using It
+    const mchTransactionRef = shortUUID.generate();
 
-    if (!updatedUser) {
-      console.error("❌ Failed to update user with mchTransactionRef.");
-      return res.status(500).json({ error: "Failed to update user transaction reference." });
-    }
+    // ✅ Store Transaction Reference & Amount in User BEFORE Initiating Payment
+    user.mchTransactionRef = mchTransactionRef;
+    user.amount = amount;
+    user.paid = false; // Reset payment status before initiating a new transaction
+    await user.save();
 
     console.log(`✅ Stored mchTransactionRef (${mchTransactionRef}) for user: ${email}`);
 
     // 🔥 Initiate Mobile Money Payment
     const transaction = await client.payment.collection.simple.chargeMobileMoney({
+      mchTransactionRef, // ✅ Use stored reference
       amount,
       currencyCode: "XAF",
       description,
       payerNote: description,
-      mchTransactionRef,
       mobileWalletNumber,
     });
 
@@ -73,7 +67,9 @@ exports.processPayment = async (req, res) => {
     if (status === "SUCCESSFUL" || status === "COMPLETED") {
       console.log("✅ Transaction successful. Transaction ID:", transactionId);
 
-      await User.findByIdAndUpdate(user._id, { paid: true, transactionId }, { new: true });
+      user.paid = true;
+      user.transactionId = transactionId;
+      await user.save();
 
       return res.status(200).json({
         message: "Payment successful.",
@@ -86,7 +82,7 @@ exports.processPayment = async (req, res) => {
       console.log("⏳ Payment still in progress. Redirecting user...");
 
       const webTransaction = await client.payment.collection.simple.chargeByWebRedirect({
-        mchTransactionRef: shortUUID.generate(),
+        mchTransactionRef, // ✅ Use same stored reference
         amount,
         currencyCode: "XAF",
         description,
@@ -113,7 +109,6 @@ exports.processPayment = async (req, res) => {
   }
 };
 
-// 🔥 Tranzak Webhook - Now Uses `mchTransactionRef`
 // 🔥 Tranzak Webhook - Enhanced Validation
 exports.tranzakWebhook = async (req, res) => {
   try {
@@ -159,11 +154,10 @@ exports.tranzakWebhook = async (req, res) => {
 
     // ✅ Process Successful Payments
     if (resource.status === "SUCCESSFUL" || resource.status === "COMPLETED") {
-      await User.findByIdAndUpdate(
-        user._id,
-        { paid: true, transactionId },
-        { new: true }
-      );
+      user.paid = true;
+      user.transactionId = transactionId;
+      await user.save();
+
       console.log(`✅ Webhook: User ${user.email} marked as paid.`);
     } else {
       console.log("⚠️ Webhook received non-success status:", resource.status);
