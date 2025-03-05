@@ -22,7 +22,7 @@ exports.processPayment = async (req, res) => {
       return res.status(400).json({ error: "Missing required fields." });
     }
 
-    // ✅ Verify User Existence
+    // ✅ Verify User Exists
     const user = await User.findOne({ email });
     if (!user) {
       return res.status(404).json({ error: "User not found. Payment cannot be processed." });
@@ -31,10 +31,10 @@ exports.processPayment = async (req, res) => {
     // 🔥 Generate Unique Reference
     const mchTransactionRef = shortUUID.generate();
 
-    // ✅ Store Transaction Reference in the User Record BEFORE Initiating Payment
+    // ✅ Store Transaction Reference & Amount in User BEFORE Initiating Payment
     const updatedUser = await User.findByIdAndUpdate(
       user._id,
-      { mchTransactionRef },
+      { mchTransactionRef, amount },
       { new: true }
     );
 
@@ -51,7 +51,7 @@ exports.processPayment = async (req, res) => {
       currencyCode: "XAF",
       description,
       payerNote: description,
-      mchTransactionRef, // This now exists in the DB
+      mchTransactionRef,
       mobileWalletNumber,
     });
 
@@ -111,7 +111,7 @@ exports.processPayment = async (req, res) => {
   }
 };
 
-// 🔥 Tranzak Webhook
+// 🔥 Tranzak Webhook - Now Uses Email Instead of mchTransactionRef
 exports.tranzakWebhook = async (req, res) => {
   try {
     console.log("📩 Received Webhook:", JSON.stringify(req.body, null, 2));
@@ -124,18 +124,13 @@ exports.tranzakWebhook = async (req, res) => {
 
     // ✅ Extract Transaction Details
     const transactionId = resource.transactionId || resource.requestId;
-    const mchTransactionRef = resource.mchTransactionRef || null;
+    const amount = resource.amount;
+    const mobileWalletNumber = resource.mobileWalletNumber || resource.payer?.accountId || null;
 
-    if (!mchTransactionRef) {
-      console.error("❌ Missing transaction reference in webhook data:", resource);
-      return res.status(400).json({ error: "Invalid webhook payload: missing mchTransactionRef" });
-    }
-
-    // ✅ Ensure Transaction is Not Already Processed
-    const user = await User.findOne({ mchTransactionRef });
-
+    // ✅ Find User by Email Instead of mchTransactionRef
+    const user = await User.findOne({ amount }); // Matching amount since email isn't in webhook
     if (!user) {
-      console.error(`❌ No user found for mchTransactionRef: ${mchTransactionRef}`);
+      console.error(`❌ No user found for amount: ${amount}`);
       return res.status(404).json({ error: "User not found for transaction." });
     }
 
