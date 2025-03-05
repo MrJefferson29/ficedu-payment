@@ -51,6 +51,13 @@ const UserSchema = new mongoose.Schema({
     referralCode: { type: String, unique: true },
     referredBy: { type: String, default: null },
     referrals: [{ type: mongoose.Schema.Types.ObjectId, ref: 'User' }],
+
+    // 🔥 Transaction Fields
+    mchTransactionRef: { type: String, unique: true, sparse: true }, // Store Tranzak transaction reference
+    transactionId: { type: String, default: null }, // Store Tranzak transaction ID
+    amountPaid: { type: Number, default: 0 }, // Store amount paid
+    transactionStatus: { type: String, default: "PENDING" } // Track payment status
+
 }, { timestamps: true });
 
 module.exports = mongoose.model('User', UserSchema);

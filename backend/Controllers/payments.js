@@ -23,9 +23,13 @@ exports.processPayment = async (req, res) => {
     }
 
     // ✅ Verify User Exists
-    const user = await User.findOne({ email });
+    // ✅ Find User by `mchTransactionRef`
+    const user = await User.findOne({ mchTransactionRef });
+
     if (!user) {
-      return res.status(404).json({ error: "User not found. Payment cannot be processed." });
+      return res
+        .status(404)
+        .json({ error: "User not found. Payment cannot be processed." });
     }
 
     // 🔥 Generate Unique Reference
@@ -40,20 +44,25 @@ exports.processPayment = async (req, res) => {
 
     if (!updatedUser) {
       console.error("❌ Failed to update user with mchTransactionRef.");
-      return res.status(500).json({ error: "Failed to update user transaction reference." });
+      return res
+        .status(500)
+        .json({ error: "Failed to update user transaction reference." });
     }
 
-    console.log(`✅ Stored mchTransactionRef (${mchTransactionRef}) for user: ${email}`);
+    console.log(
+      `✅ Stored mchTransactionRef (${mchTransactionRef}) for user: ${email}`
+    );
 
     // 🔥 Initiate Mobile Money Payment
-    const transaction = await client.payment.collection.simple.chargeMobileMoney({
-      amount,
-      currencyCode: "XAF",
-      description,
-      payerNote: description,
-      mchTransactionRef,
-      mobileWalletNumber,
-    });
+    const transaction =
+      await client.payment.collection.simple.chargeMobileMoney({
+        amount,
+        currencyCode: "XAF",
+        description,
+        payerNote: description,
+        mchTransactionRef,
+        mobileWalletNumber,
+      });
 
     if (!transaction || !transaction.data) {
       console.error("❌ Payment initiation failed:", transaction);
@@ -62,7 +71,8 @@ exports.processPayment = async (req, res) => {
 
     // ✅ Extract Transaction Info
     const { data } = transaction;
-    const transactionId = data?.transactionId || data?.requestId || "UNKNOWN_TRANSACTION_ID";
+    const transactionId =
+      data?.transactionId || data?.requestId || "UNKNOWN_TRANSACTION_ID";
     const status = data?.status;
 
     console.log("⏳ Payment in progress. Transaction ID:", transactionId);
@@ -71,7 +81,11 @@ exports.processPayment = async (req, res) => {
     if (status === "SUCCESSFUL" || status === "COMPLETED") {
       console.log("✅ Transaction successful. Transaction ID:", transactionId);
 
-      await User.findByIdAndUpdate(user._id, { paid: true, transactionId }, { new: true });
+      await User.findByIdAndUpdate(
+        user._id,
+        { paid: true, transactionId },
+        { new: true }
+      );
 
       return res.status(200).json({
         message: "Payment successful.",
@@ -83,12 +97,13 @@ exports.processPayment = async (req, res) => {
     if (status === "PAYMENT_IN_PROGRESS") {
       console.log("⏳ Payment still in progress. Redirecting user...");
 
-      const webTransaction = await client.payment.collection.simple.chargeByWebRedirect({
-        mchTransactionRef: shortUUID.generate(),
-        amount,
-        currencyCode: "XAF",
-        description,
-      });
+      const webTransaction =
+        await client.payment.collection.simple.chargeByWebRedirect({
+          mchTransactionRef: shortUUID.generate(),
+          amount,
+          currencyCode: "XAF",
+          description,
+        });
 
       if (webTransaction?.data?.links?.paymentAuthUrl) {
         return res.status(202).json({
@@ -127,15 +142,22 @@ exports.tranzakWebhook = async (req, res) => {
     const mchTransactionRef = resource.mchTransactionRef;
 
     if (!mchTransactionRef) {
-      console.error("❌ Missing transaction reference in webhook data:", resource);
-      return res.status(400).json({ error: "Invalid webhook payload: missing mchTransactionRef" });
+      console.error(
+        "❌ Missing transaction reference in webhook data:",
+        resource
+      );
+      return res
+        .status(400)
+        .json({ error: "Invalid webhook payload: missing mchTransactionRef" });
     }
 
     // ✅ Find User by `mchTransactionRef`
     const user = await User.findOne({ mchTransactionRef });
 
     if (!user) {
-      console.error(`❌ No user found for mchTransactionRef: ${mchTransactionRef}`);
+      console.error(
+        `❌ No user found for mchTransactionRef: ${mchTransactionRef}`
+      );
       return res.status(404).json({ error: "User not found for transaction." });
     }
 
@@ -146,7 +168,11 @@ exports.tranzakWebhook = async (req, res) => {
 
     // ✅ Process Successful Payments
     if (resource.status === "SUCCESSFUL" || resource.status === "COMPLETED") {
-      await User.findByIdAndUpdate(user._id, { paid: true, transactionId }, { new: true });
+      await User.findByIdAndUpdate(
+        user._id,
+        { paid: true, transactionId },
+        { new: true }
+      );
       console.log(`✅ Webhook: User ${user.email} marked as paid.`);
     } else {
       console.log("⚠️ Webhook received non-success status:", resource.status);
