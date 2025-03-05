@@ -5,7 +5,7 @@ require("dotenv").config();
 
 if (!process.env.TRANZAK_APP_ID || !process.env.TRANZAK_APP_KEY) {
   console.error("❌ Missing Tranzak credentials in environment variables.");
-  process.exit(1); // Terminate the process if env variables are missing
+  process.exit(1); // Terminate if credentials are missing
 }
 
 const client = new tranzak({
@@ -39,51 +39,23 @@ exports.processPayment = async (req, res) => {
     });
 
     if (!transaction || !transaction.data) {
+      console.error("❌ Payment initiation failed:", transaction);
       return res.status(500).json({ error: "Payment initiation failed." });
     }
 
     // ✅ Extract Transaction Info
-    const { status, transactionId, requestId, merchant } = transaction.data;
+    const { data } = transaction;
+    const transactionId = data?.transactionId || data?.requestId || "UNKNOWN_TRANSACTION_ID";
+    const status = data?.status;
+
+    console.log("⏳ Payment in progress. Transaction ID:", transactionId);
 
     // ✅ Successful Payment Flow
     if (status === "SUCCESSFUL" || status === "COMPLETED") {
       console.log("✅ Transaction successful. Transaction ID:", transactionId);
 
-      if (merchant) {
-        try {
-          const accounts = await client.account.list();
-          const collectionAccount = accounts.find(
-            (acc) => acc.data.accountId === merchant.accountId
-          );
-
-          if (collectionAccount) {
-            const transferAmount = amount * 0.93;
-
-            await client.payment.transfer.simple.toPayoutAccount({
-              amount: transferAmount,
-              currencyCode: "XAF",
-              customTransactionRef: shortUUID.generate(),
-              description: "For payouts",
-              payeeNote: "For payouts.",
-              fundingAccountId: collectionAccount.data.accountId,
-            });
-
-            await client.payment.transfer.simple.toMobileMoney({
-              payeeAccountId: mobileWalletNumber,
-              amount: transferAmount,
-              currencyCode: "XAF",
-              customTransactionRef: shortUUID.generate(),
-              description: "Procurement of materials",
-              payeeNote: "Procurement of materials",
-            });
-          }
-        } catch (transferError) {
-          console.error("⚠️ Error transferring funds:", transferError);
-          return res.status(500).json({ error: "Fund transfer failed." });
-        }
-      }
-
-      await User.findByIdAndUpdate(user._id, { paid: true }, { new: true });
+      // ✅ Update User Payment Status
+      await User.findByIdAndUpdate(user._id, { paid: true, transactionId }, { new: true });
 
       return res.status(200).json({
         message: "Payment successful.",
@@ -93,7 +65,8 @@ exports.processPayment = async (req, res) => {
 
     // 🔄 Handle Payment in Progress
     if (status === "PAYMENT_IN_PROGRESS") {
-      console.log("⏳ Payment in progress. Transaction ID:", transactionId);
+      console.log("⏳ Payment still in progress. Redirecting user...");
+
       const webTransaction = await client.payment.collection.simple.chargeByWebRedirect({
         mchTransactionRef: shortUUID.generate(),
         amount,
@@ -115,23 +88,7 @@ exports.processPayment = async (req, res) => {
       });
     }
 
-    // 🔄 Fallback Redirection for Other Statuses
-    console.log("⚠️ Fallback redirection. Status:", status);
-    const webTransaction = await client.payment.collection.simple.chargeByWebRedirect({
-      mchTransactionRef: shortUUID.generate(),
-      amount,
-      currencyCode: "XAF",
-      description,
-    });
-
-    if (webTransaction?.data?.links?.paymentAuthUrl) {
-      return res.status(202).json({
-        message: "Redirect user to complete payment.",
-        paymentUrl: webTransaction.data.links.paymentAuthUrl,
-      });
-    }
-
-    return res.status(500).json({ error: "Payment redirection failed." });
+    return res.status(500).json({ error: "Unexpected payment status." });
   } catch (error) {
     console.error("🚨 Payment processing error:", error);
     return res.status(500).json({ error: "Payment processing failed." });
@@ -143,32 +100,43 @@ exports.tranzakWebhook = async (req, res) => {
   try {
     console.log("📩 Received Webhook:", JSON.stringify(req.body, null, 2));
 
-    const { data } = req.body;
-    if (!data?.requestId) {
+    const { resource } = req.body;
+    if (!resource?.requestId) {
+      console.error("❌ Invalid webhook payload: missing requestId.");
       return res.status(400).json({ error: "Invalid webhook payload" });
     }
 
-    // ✅ Ensure Transaction is Not Already Processed
-    const existingUser = await User.findOne({ transactionId: data.requestId });
+    // ✅ Extract Transaction Details
+    const transactionId = resource.transactionId || resource.requestId;
+    const mobileWalletNumber = resource.mobileWalletNumber || resource.payer?.accountId || null;
+
+    if (!mobileWalletNumber) {
+      console.error("❌ Missing mobile wallet number in webhook data:", resource);
+      return res.status(400).json({ error: "Invalid webhook payload: missing mobileWalletNumber" });
+    }
+
+    // ✅ Check if Transaction is Already Processed
+    const existingUser = await User.findOne({ transactionId });
     if (existingUser?.paid) {
+      console.log(`✅ Transaction ${transactionId} already processed.`);
       return res.status(200).json({ message: "Transaction already processed" });
     }
 
     // ✅ Process Successful Payments
-    if (data.status === "SUCCESSFUL" || data.status === "COMPLETED") {
+    if (resource.status === "SUCCESSFUL" || resource.status === "COMPLETED") {
       const updatedUser = await User.findOneAndUpdate(
-        { phone: data.mobileWalletNumber },
-        { paid: true, transactionId: data.requestId },
+        { phone: mobileWalletNumber },
+        { paid: true, transactionId },
         { new: true }
       );
 
       if (updatedUser) {
         console.log(`✅ Webhook: User ${updatedUser.email} marked as paid.`);
       } else {
-        console.error("❌ User not found for phone:", data.mobileWalletNumber);
+        console.error("❌ User not found for phone:", mobileWalletNumber);
       }
     } else {
-      console.log("⚠️ Webhook received non-success status:", data.status);
+      console.log("⚠️ Webhook received non-success status:", resource.status);
     }
 
     return res.sendStatus(200);
