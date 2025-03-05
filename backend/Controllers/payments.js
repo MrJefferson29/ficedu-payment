@@ -31,8 +31,19 @@ exports.processPayment = async (req, res) => {
     // 🔥 Generate Unique Reference
     const mchTransactionRef = shortUUID.generate();
 
-    // 🔥 Store Transaction Reference in the User Record
-    await User.findByIdAndUpdate(user._id, { mchTransactionRef }, { new: true });
+    // ✅ Store Transaction Reference in the User Record BEFORE Initiating Payment
+    const updatedUser = await User.findByIdAndUpdate(
+      user._id,
+      { mchTransactionRef },
+      { new: true }
+    );
+
+    if (!updatedUser) {
+      console.error("❌ Failed to update user with mchTransactionRef.");
+      return res.status(500).json({ error: "Failed to update user transaction reference." });
+    }
+
+    console.log(`✅ Stored mchTransactionRef (${mchTransactionRef}) for user: ${email}`);
 
     // 🔥 Initiate Mobile Money Payment
     const transaction = await client.payment.collection.simple.chargeMobileMoney({
@@ -40,7 +51,7 @@ exports.processPayment = async (req, res) => {
       currencyCode: "XAF",
       description,
       payerNote: description,
-      mchTransactionRef,
+      mchTransactionRef, // This now exists in the DB
       mobileWalletNumber,
     });
 
@@ -120,14 +131,14 @@ exports.tranzakWebhook = async (req, res) => {
       return res.status(400).json({ error: "Invalid webhook payload: missing mchTransactionRef" });
     }
 
-    // ✅ Find User Using `mchTransactionRef`
+    // ✅ Ensure Transaction is Not Already Processed
     const user = await User.findOne({ mchTransactionRef });
+
     if (!user) {
       console.error(`❌ No user found for mchTransactionRef: ${mchTransactionRef}`);
       return res.status(404).json({ error: "User not found for transaction." });
     }
 
-    // ✅ Ensure Transaction is Not Already Processed
     if (user.paid) {
       console.log(`✅ Transaction ${transactionId} already processed.`);
       return res.status(200).json({ message: "Transaction already processed" });
