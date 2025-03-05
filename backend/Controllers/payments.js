@@ -148,6 +148,7 @@ exports.tranzakWebhook = async (req, res) => {
       );
       return res.status(404).json({ error: "User not found for transaction." });
     }
+    console.log("Received Webhook Transaction Reference:", req.body.resource.mchTransactionRef);
 
     if (user.paid) {
       console.log(`✅ Transaction ${transactionId} already processed.`);
