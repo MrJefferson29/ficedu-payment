@@ -140,7 +140,8 @@ exports.tranzakWebhook = async (req, res) => {
     }
 
     // ✅ Find User by `mchTransactionRef`
-    const user = await User.findOne({ mchTransactionRef });
+    const user = await User.findOne({ mchTransactionRef: req.body.resource.mchTransactionRef });
+
 
     if (!user) {
       console.error(
