@@ -14,16 +14,19 @@ exports.processPayment = async (req, res) => {
   try {
     const { amount, mobileWalletNumber, description, email } = req.body;
     if (!amount || !mobileWalletNumber || !description || !email) {
+      console.error("Missing required fields:", req.body);
       return res.status(400).json({ error: "Missing required fields." });
     }
 
     // Verify that the user exists (using email)
     const user = await User.findOne({ email: email });
     if (!user) {
+      console.error("User not found for email:", email);
       return res.status(404).json({ error: "User not found. Payment cannot be processed." });
     }
 
     // Initiate the mobile money payment via Tranzak
+    console.log("Initiating payment for user:", email);
     const transaction = await client.payment.collection.simple.chargeMobileMoney({
       amount,
       currencyCode: "XAF",
@@ -33,6 +36,7 @@ exports.processPayment = async (req, res) => {
       mobileWalletNumber,
     });
 
+    // Refresh transaction status if available
     if (transaction.refresh) {
       await transaction.refresh();
     }
@@ -46,11 +50,11 @@ exports.processPayment = async (req, res) => {
       ? transaction.data.transactionId || transaction.data.requestId
       : null;
 
-    // If payment is finalized, perform immediate fund transfers and update the user.
+    // Successful Payment Flow
     if (status === "SUCCESSFUL" || status === "COMPLETED") {
       console.log("Transaction fully successful. Transaction ID:", transactionId);
-      
-      // (Optional) If merchant information is provided, perform fund transfers.
+
+      // Optional: perform fund transfers if merchant info is provided
       if (transaction.data.merchant) {
         let accounts;
         try {
@@ -97,13 +101,17 @@ exports.processPayment = async (req, res) => {
       }
       
       // Update the user's paid status
-      const updatedUser = await User.findByIdAndUpdate(user._id, { paid: true }, { new: true });
+      const updatedUser = await User.findByIdAndUpdate(
+        user._id,
+        { paid: true },
+        { new: true }
+      );
       if (!updatedUser) {
-        console.error("User update failed.");
+        console.error("User update failed for user:", user.email);
         return res.status(500).json({ error: "Failed to update user payment status." });
       }
       console.log("User's paid status updated successfully:", updatedUser);
-  
+
       return res.status(200).json({
         message: "Payment processed successfully and user status updated.",
         transactionId: transactionId,
@@ -137,7 +145,8 @@ exports.processPayment = async (req, res) => {
         paymentUrl: webTransaction.data.links.paymentAuthUrl,
       });
     } else {
-      // Fallback: attempt web redirection
+      // Fallback: attempt web redirection for other statuses
+      console.log("Fallback redirection for transaction. Status:", status);
       const webTransaction = await client.payment.collection.simple.chargeByWebRedirect({
         mchTransactionRef: shortUUID.generate(),
         amount,
@@ -151,7 +160,7 @@ exports.processPayment = async (req, res) => {
         !webTransaction.data.links ||
         !webTransaction.data.links.paymentAuthUrl
       ) {
-        console.error("Web Transaction response missing payment URL:", webTransaction);
+        console.error("Fallback web Transaction response missing payment URL:", webTransaction);
         return res.status(500).json({ error: "Payment redirection failed." });
       }
   
@@ -168,41 +177,48 @@ exports.processPayment = async (req, res) => {
 
 exports.tranzakWebhook = async (req, res) => {
   try {
-    console.log("Received Tranzak webhook:", JSON.stringify(req.body, null, 2));
+    // Log full webhook payload
+    console.log("Received Tranzak webhook payload:", JSON.stringify(req.body, null, 2));
 
     const { data } = req.body;
     if (!data || !data.requestId) {
+      console.error("Invalid webhook payload:", req.body);
       return res.status(400).json({ error: "Invalid webhook payload" });
     }
 
-    // Security: Ensure webhook comes from Tranzak (implement validation if available)
+    // (Optional) Verify webhook signature here if provided by Tranzak
+
     const transactionId = data.requestId;
 
-    // Check if the transaction has already been processed (idempotency check)
+    // Check idempotency: ensure this transaction hasn't already been processed
     const existingUser = await User.findOne({ transactionId });
     if (existingUser && existingUser.paid) {
-      console.log(`Transaction ${transactionId} was already processed. Skipping.`);
+      console.log(`Transaction ${transactionId} was already processed. Skipping update.`);
       return res.status(200).json({ message: "Transaction already processed" });
     }
 
     // Process only successful payments
     if (data.status === "SUCCESSFUL" || data.status === "COMPLETED") {
       const mobileWalletNumber = data.mobileWalletNumber;
+      console.log("Processing webhook for mobileWalletNumber:", mobileWalletNumber);
 
-      // Find the user by mobile number or any unique identifier
-      const user = await User.findOne({ phone: mobileWalletNumber });
-      if (user) {
-        user.paid = true;
-        user.transactionId = transactionId; // Store transaction ID to prevent duplicates
-        await user.save();
-        console.log(`User ${user.email} marked as paid via webhook.`);
+      // Use findOneAndUpdate for a more atomic operation
+      const updatedUser = await User.findOneAndUpdate(
+        { phone: mobileWalletNumber },
+        { paid: true, transactionId: transactionId },
+        { new: true }
+      );
+
+      if (updatedUser) {
+        console.log(`User ${updatedUser.email} marked as paid via webhook.`);
       } else {
         console.error("User not found for mobileWalletNumber:", mobileWalletNumber);
       }
     } else {
-      console.log("Webhook received with status:", data.status);
+      console.log("Webhook received with non-success status:", data.status);
     }
 
+    // Always respond with 200 OK to acknowledge receipt
     return res.sendStatus(200);
   } catch (error) {
     console.error("Error handling webhook:", error);
