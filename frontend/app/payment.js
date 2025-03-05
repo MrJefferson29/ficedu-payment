@@ -32,7 +32,7 @@ const Payment = () => {
 
     try {
       // Replace with your actual backend endpoint
-      const response = await fetch('http://192.168.245.1:5000/process/payment', {
+      const response = await fetch('https://ficedu-payment.onrender.com/process/payment', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
