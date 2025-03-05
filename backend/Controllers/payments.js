@@ -113,8 +113,8 @@ exports.processPayment = async (req, res) => {
   }
 };
 
-
 // 🔥 Tranzak Webhook - Now Uses `mchTransactionRef`
+// 🔥 Tranzak Webhook - Enhanced Validation
 exports.tranzakWebhook = async (req, res) => {
   try {
     console.log("📩 Received Webhook:", JSON.stringify(req.body, null, 2));
@@ -134,14 +134,16 @@ exports.tranzakWebhook = async (req, res) => {
         "❌ Missing transaction reference in webhook data:",
         resource
       );
-      return res
-        .status(400)
-        .json({ error: "Invalid webhook payload: missing mchTransactionRef" });
+      return res.status(400).json({ error: "Invalid webhook payload: missing mchTransactionRef" });
     }
 
     // ✅ Find User by `mchTransactionRef`
-    const user = await User.findOne({ mchTransactionRef: req.body.resource.mchTransactionRef });
+    const user = await User.findOne({ mchTransactionRef });
 
+    console.log(`📩 Webhook Received - mchTransactionRef: ${mchTransactionRef}`);
+    if (user) {
+      console.log(`📩 Database Stored - User: ${user.email}, mchTransactionRef: ${user.mchTransactionRef}`);
+    }
 
     if (!user) {
       console.error(
@@ -149,7 +151,6 @@ exports.tranzakWebhook = async (req, res) => {
       );
       return res.status(404).json({ error: "User not found for transaction." });
     }
-    console.log("Received Webhook Transaction Reference:", req.body.resource.mchTransactionRef);
 
     if (user.paid) {
       console.log(`✅ Transaction ${transactionId} already processed.`);
