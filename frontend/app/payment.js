@@ -18,7 +18,7 @@ const Payment = () => {
     setLoading(true);
     
     try {
-      const response = await fetch("https://your-backend-url.com/api/process-payment", {
+      const response = await fetch("https://ficedu-payment.onrender.com/process/payment", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",

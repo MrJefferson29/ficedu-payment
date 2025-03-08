@@ -108,7 +108,7 @@ export default function Index() {
               </TouchableOpacity>
             </View>
           </View>
-          <Text style={styles.heading}>How to study</Text>
+          <Text style={styles.heading}></Text>
           <View>
             <Features />
           </View>
