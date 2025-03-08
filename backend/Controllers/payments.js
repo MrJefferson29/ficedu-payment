@@ -1,7 +1,7 @@
 // paymentController.js
 const tranzak = require("tranzak-node").default;
 const shortUUID = require("short-uuid");
-const User = require('../Models/user'); // Ensure model name uses uppercase for clarity
+const User = require('../Models/user'); // Ensure correct model naming (uppercase)
 const Transaction = require('../Models/transaction');
 require("dotenv").config();
 
@@ -42,20 +42,25 @@ exports.processPayment = async (req, res) => {
       ? transactionResponse.data.transactionId || transactionResponse.data.requestId
       : null;
 
+    if (!transactionId) {
+      console.error("No transaction ID received from Tranzak.");
+      return res.status(500).json({ error: "No transaction ID received." });
+    }
+
     // Save the transaction info in the database for later reference.
-    // Set an initial status of PAYMENT_IN_PROGRESS if not already SUCCESSFUL or COMPLETED.
+    // Set an initial status of PAYMENT_IN_PROGRESS unless already SUCCESSFUL or COMPLETED.
     await Transaction.create({
       transactionId,
-      email, // Store the user's email to later update their paid status
+      email, // store the user's email for later update
       amount,
       status: (status === "SUCCESSFUL" || status === "COMPLETED") ? status : "PAYMENT_IN_PROGRESS",
       initiatedAt: new Date(),
     });
+    console.log(`Transaction record created for ID: ${transactionId} with email: ${email}`);
 
     // Handle the different statuses returned by Tranzak.
     if (status === "SUCCESSFUL" || status === "COMPLETED") {
       console.log("Transaction fully successful. Transaction ID:", transactionId);
-      // (Additional fund transfers could be added here if needed.)
       return res.status(200).json({
         message: "Payment processed successfully.",
         transactionId,
@@ -89,7 +94,6 @@ exports.processPayment = async (req, res) => {
         paymentUrl: webTransaction.data.links.paymentAuthUrl,
       });
     } else {
-      // Fallback for other statuses using a web redirection
       console.log("Fallback redirection for transaction. Status:", status);
       const webTransaction = await client.payment.collection.simple.chargeByWebRedirect({
         mchTransactionRef: shortUUID.generate(),
@@ -130,7 +134,7 @@ exports.tranzakWebhook = async (req, res) => {
     }
 
     const transactionId = resource.requestId;
-    const event = eventType.toUpperCase(); // Normalize case for safety
+    const event = eventType.toUpperCase(); // Normalize event type
 
     if (event === "REQUEST.INITIATED") {
       console.log("Transaction initiated. Transaction ID:", transactionId);
@@ -150,8 +154,8 @@ exports.tranzakWebhook = async (req, res) => {
         return res.status(404).json({ error: "Transaction not found" });
       }
 
+      // Update the user's paid status based on the stored email.
       if (txn.email) {
-        // Update the user's 'paid' status if not already updated
         const updatedUser = await User.findOneAndUpdate(
           { email: txn.email, paid: false },
           { paid: true },

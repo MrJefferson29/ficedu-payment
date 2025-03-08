@@ -17,7 +17,7 @@ const Payment = () => {
           amount: 2500,
           mobileWalletNumber: '237679691817',
           description: 'Test Payment',
-          email: "thejefferson29@gmail.com"
+          email: "lana@gmail.com"
         }),
       });
       
