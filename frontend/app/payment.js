@@ -1,14 +1,8 @@
 import React, { useState } from 'react';
-import {
-  View,
-  Text,
-  TextInput,
-  Button,
-  StyleSheet,
-  ActivityIndicator,
-  Alert,
-} from 'react-native';
-import * as WebBrowser from 'expo-web-browser';
+import { View, Text, TextInput, Button, StyleSheet, ActivityIndicator, Alert } from 'react-native';
+import { WebView } from 'react-native-webview';
+
+const API_URL = 'https://your-backend.com/pay'; // Replace with your backend URL
 
 const Payment = () => {
   const [amount, setAmount] = useState('');
@@ -16,108 +10,99 @@ const Payment = () => {
   const [description, setDescription] = useState('');
   const [email, setEmail] = useState('');
   const [loading, setLoading] = useState(false);
-  const [transactionId, setTransactionId] = useState('');
+  const [redirectUrl, setRedirectUrl] = useState(null);
 
-  const validateEmail = (email) => {
-    const emailRegex = /\S+@\S+\.\S+/;
-    return emailRegex.test(email);
-  };
-
-  const handlePayment = async () => {
+  // This function submits the payment details to your backend.
+  const handlePaymentInitiation = async () => {
     if (!amount || !mobileWalletNumber || !description || !email) {
       Alert.alert('Error', 'Please fill in all fields.');
       return;
     }
 
-    if (isNaN(parseFloat(amount)) || parseFloat(amount) <= 0) {
-      Alert.alert('Error', 'Please enter a valid amount.');
-      return;
-    }
-
-    if (!validateEmail(email)) {
-      Alert.alert('Error', 'Please enter a valid email.');
-      return;
-    }
-
-    console.log('Current Transaction ID:', transactionId);
     setLoading(true);
 
     try {
-      const response = await fetch('https://ficedu-payment.onrender.com/process/payment', {
+      const response = await fetch(API_URL, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          amount: parseFloat(amount),
-          mobileWalletNumber,
-          description,
-          email,
-        }),
+        body: JSON.stringify({ amount, mobileWalletNumber, description, email }),
       });
 
       const data = await response.json();
 
       if (!response.ok) {
-        Alert.alert('Error', data.error || 'Payment failed');
-      } else if (response.status === 202 && data.paymentUrl) {
-        // Open payment URL if required
-        setTransactionId(data.transactionId || '');
-        await WebBrowser.openBrowserAsync(data.paymentUrl);
-      } else if (response.status === 200) {
-        // Payment initiated successfully
-        setTransactionId(data.transactionId);
-        Alert.alert(
-          'Payment Initiated',
-          `Payment initiated successfully. Transaction ID: ${data.transactionId}\nPlease wait for confirmation.`
-        );
-      } else {
-        Alert.alert('Error', 'Unexpected response from payment processing.');
+        Alert.alert('Error', data.error || 'Payment initiation failed.');
+        setLoading(false);
+        return;
       }
+
+      // On success, get the redirectUrl from the response and load it in the WebView.
+      setRedirectUrl(data.redirectUrl);
     } catch (error) {
-      console.error('Payment error:', error);
-      Alert.alert('Error', 'An error occurred while processing payment.');
+      Alert.alert('Error', 'An error occurred while processing your payment.');
+      console.error('Payment initiation error:', error);
     } finally {
       setLoading(false);
     }
   };
 
+  // If redirectUrl exists, render the WebView for payment processing.
+  if (redirectUrl) {
+    return (
+      <WebView
+        source={{ uri: redirectUrl }}
+        onNavigationStateChange={(navState) => {
+          // You can check the URL for the returnUrl endpoint to know when the payment is complete.
+          if (navState.url.includes('payment-success')) {
+            Alert.alert('Success', 'Your payment has been completed!');
+            // Optionally, clear the WebView by resetting redirectUrl.
+            setRedirectUrl(null);
+          }
+        }}
+        startInLoadingState
+        renderLoading={() => <ActivityIndicator style={styles.loading} size="large" />}
+      />
+    );
+  }
+
   return (
     <View style={styles.container}>
-      <Text style={styles.header}>Make a Payment</Text>
+      <Text style={styles.heading}>Make a Payment</Text>
+      
       <TextInput
+        placeholder="Email"
+        value={email}
+        onChangeText={setEmail}
+        autoCapitalize="none"
+        keyboardType="email-address"
         style={styles.input}
+      />
+      <TextInput
         placeholder="Amount"
-        keyboardType="numeric"
         value={amount}
         onChangeText={setAmount}
+        keyboardType="numeric"
+        style={styles.input}
       />
       <TextInput
-        style={styles.input}
         placeholder="Mobile Wallet Number"
-        keyboardType="phone-pad"
         value={mobileWalletNumber}
         onChangeText={setMobileWalletNumber}
+        keyboardType="phone-pad"
+        style={styles.input}
       />
       <TextInput
-        style={styles.input}
         placeholder="Description"
         value={description}
         onChangeText={setDescription}
-      />
-      <TextInput
         style={styles.input}
-        placeholder="Email"
-        keyboardType="email-address"
-        value={email}
-        onChangeText={setEmail}
       />
+
       {loading ? (
-        <ActivityIndicator size="large" color="#0000ff" />
+        <ActivityIndicator size="large" color="#000" />
       ) : (
-        <Button title="Pay Now" onPress={handlePayment} disabled={loading} />
+        <Button title="Pay Now" onPress={handlePaymentInitiation} />
       )}
-      {transactionId ? (
-        <Text style={styles.success}>Transaction ID: {transactionId}</Text>
-      ) : null}
     </View>
   );
 };
@@ -125,29 +110,25 @@ const Payment = () => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    padding: 16,
-    backgroundColor: '#fff',
+    padding: 20,
     justifyContent: 'center',
+    backgroundColor: '#fff',
   },
-  header: {
+  heading: {
     fontSize: 24,
-    marginBottom: 24,
-    textAlign: 'center',
-    fontWeight: 'bold',
+    marginBottom: 20,
+    textAlign: 'center'
   },
   input: {
-    height: 50,
-    borderColor: '#ccc',
     borderWidth: 1,
-    marginBottom: 16,
-    paddingHorizontal: 10,
-    borderRadius: 8,
+    borderColor: '#ccc',
+    padding: 12,
+    marginBottom: 15,
+    borderRadius: 5,
   },
-  success: {
-    marginTop: 16,
-    fontSize: 16,
-    color: 'green',
-    textAlign: 'center',
+  loading: {
+    flex: 1,
+    justifyContent: 'center',
   },
 });
 
