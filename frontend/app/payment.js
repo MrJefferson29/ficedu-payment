@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { View, Text, TextInput, Button, StyleSheet, ActivityIndicator, Alert } from 'react-native';
 import { WebView } from 'react-native-webview';
 
-const API_URL = 'https://your-backend.com/pay'; // Replace with your backend URL
+const API_URL = 'https://ficedu-payment.onrender.com/process/payment'; // Replace with your backend URL
 
 const Payment = () => {
   const [amount, setAmount] = useState('');

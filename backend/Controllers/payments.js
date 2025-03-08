@@ -65,7 +65,7 @@ exports.processPayment = async (req, res) => {
     }
 
     const { data } = transaction;
-    const redirectUrl = data?.redirectUrl;
+    const redirectUrl = data?.returnUrl;
     const transactionId = data?.transactionId || data?.requestId || "UNKNOWN_TRANSACTION_ID";
 
     if (!redirectUrl) {
