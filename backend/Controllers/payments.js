@@ -1,7 +1,6 @@
 // paymentController.js
 const tranzak = require("tranzak-node").default;
 const shortUUID = require("short-uuid");
-const User = require("../Models/user"); // Adjust the path if necessary
 require("dotenv").config();
 
 const client = new tranzak({
@@ -12,21 +11,14 @@ const client = new tranzak({
 
 exports.processPayment = async (req, res) => {
   try {
-    const { amount, mobileWalletNumber, description, email } = req.body;
-    if (!amount || !mobileWalletNumber || !description || !email) {
+    const { amount, mobileWalletNumber, description } = req.body;
+    if (!amount || !mobileWalletNumber || !description) {
       console.error("Missing required fields:", req.body);
       return res.status(400).json({ error: "Missing required fields." });
     }
 
-    // Verify that the user exists (using email)
-    const user = await User.findOne({ email: email });
-    if (!user) {
-      console.error("User not found for email:", email);
-      return res.status(404).json({ error: "User not found. Payment cannot be processed." });
-    }
-
     // Initiate the mobile money payment via Tranzak
-    console.log("Initiating payment for user:", email);
+    console.log("Initiating payment with mobileWalletNumber:", mobileWalletNumber);
     const transaction = await client.payment.collection.simple.chargeMobileMoney({
       amount,
       currencyCode: "XAF",
@@ -54,7 +46,7 @@ exports.processPayment = async (req, res) => {
     if (status === "SUCCESSFUL" || status === "COMPLETED") {
       console.log("Transaction fully successful. Transaction ID:", transactionId);
 
-      // Optional: perform fund transfers if merchant info is provided
+      // Optional fund transfers if merchant info is provided
       if (transaction.data.merchant) {
         let accounts;
         try {
@@ -83,7 +75,7 @@ exports.processPayment = async (req, res) => {
               payeeNote: "For payouts.",
               fundingAccountId: collectionAccount.data.accountId,
             });
-  
+
             // Transfer funds to the mobile money wallet
             await client.payment.transfer.simple.toMobileMoney({
               payeeAccountId: mobileWalletNumber,
@@ -99,21 +91,9 @@ exports.processPayment = async (req, res) => {
           }
         }
       }
-      
-      // Update the user's paid status
-      const updatedUser = await User.findByIdAndUpdate(
-        user._id,
-        { paid: true },
-        { new: true }
-      );
-      if (!updatedUser) {
-        console.error("User update failed for user:", user.email);
-        return res.status(500).json({ error: "Failed to update user payment status." });
-      }
-      console.log("User's paid status updated successfully:", updatedUser);
 
       return res.status(200).json({
-        message: "Payment processed successfully and user status updated.",
+        message: "Payment processed successfully.",
         transactionId: transactionId,
       });
     } else if (status === "PAYMENT_IN_PROGRESS") {
@@ -125,7 +105,7 @@ exports.processPayment = async (req, res) => {
         currencyCode: "XAF",
         description,
       });
-  
+
       if (
         !webTransaction ||
         !webTransaction.data ||
@@ -138,7 +118,7 @@ exports.processPayment = async (req, res) => {
           transactionId: transactionId,
         });
       }
-  
+
       return res.status(202).json({
         message: "Redirect user to complete payment.",
         transactionId: transactionId,
@@ -153,7 +133,7 @@ exports.processPayment = async (req, res) => {
         currencyCode: "XAF",
         description,
       });
-  
+
       if (
         !webTransaction ||
         !webTransaction.data ||
@@ -163,7 +143,7 @@ exports.processPayment = async (req, res) => {
         console.error("Fallback web Transaction response missing payment URL:", webTransaction);
         return res.status(500).json({ error: "Payment redirection failed." });
       }
-  
+
       return res.status(202).json({
         message: "Redirect user to complete payment.",
         paymentUrl: webTransaction.data.links.paymentAuthUrl,
@@ -188,37 +168,17 @@ exports.tranzakWebhook = async (req, res) => {
 
     const transactionId = data.requestId;
 
-    // Check if the transaction was already processed (idempotency check)
-    const existingTransaction = await User.findOne({ transactionId });
-    if (existingTransaction && existingTransaction.paid) {
-      console.log(`Transaction ${transactionId} was already processed. Skipping update.`);
-      return res.status(200).json({ message: "Transaction already processed" });
-    }
-
-    // Handle the status of the transaction
+    // Process transaction status based on the webhook payload
     switch (data.status) {
       case "SUCCESSFUL":
       case "COMPLETED":
-        // Transaction completed, update user
-        const mobileWalletNumber = data.mobileWalletNumber;
-        console.log("Transaction completed successfully for mobileWalletNumber:", mobileWalletNumber);
-
-        const updatedUser = await User.findOneAndUpdate(
-          { phone: mobileWalletNumber },
-          { paid: true, transactionId: transactionId },
-          { new: true }
-        );
-
-        if (updatedUser) {
-          console.log(`User ${updatedUser.email} marked as paid via webhook.`);
-        } else {
-          console.error("User not found for mobileWalletNumber:", mobileWalletNumber);
-        }
+        console.log("Transaction completed successfully. Transaction ID:", transactionId);
+        // Update server records here if needed
         break;
 
       case "PAYMENT_IN_PROGRESS":
-        // You could handle the "in-progress" status by sending a notification or logging it
         console.log("Payment is still in progress for transaction:", transactionId);
+        // Optionally notify or log that the payment is in progress
         break;
 
       default:
