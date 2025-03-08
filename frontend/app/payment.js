@@ -25,9 +25,7 @@ const Payment = () => {
       return;
     }
     
-    // Log current transactionId for debugging
     console.log('Current Transaction ID:', transactionId);
-    
     setLoading(true);
 
     try {
@@ -48,10 +46,24 @@ const Payment = () => {
       if (!response.ok) {
         Alert.alert('Error', data.error || 'Payment failed');
       } else if (response.status === 200) {
+        // Payment initiated successfully (webhook will later confirm payment)
         setTransactionId(data.transactionId);
-        Alert.alert('Success', `Payment processed. Transaction ID: ${data.transactionId}`);
-      } else if (response.status === 202 && data.paymentUrl) {
-        await WebBrowser.openBrowserAsync(data.paymentUrl);
+        Alert.alert(
+          'Payment Initiated',
+          `Payment initiated successfully. Transaction ID: ${data.transactionId}\nPlease wait for confirmation.`
+        );
+      } else if (response.status === 202) {
+        // Payment is in progress.
+        // If a paymentUrl is provided, open it. Otherwise, just inform the user.
+        if (data.paymentUrl) {
+          await WebBrowser.openBrowserAsync(data.paymentUrl);
+        } else {
+          setTransactionId(data.transactionId || '');
+          Alert.alert(
+            'Payment In Progress',
+            'Payment is in progress. Please complete the payment via your mobile wallet.'
+          );
+        }
       } else {
         Alert.alert('Error', 'Unexpected response from payment processing.');
       }

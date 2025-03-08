@@ -31,20 +31,19 @@ exports.processPayment = async (req, res) => {
     }
 
     // ✅ Generate Unique Reference for this transaction
-    // Optionally, you could also include a timestamp or random string here if needed
     const mchTransactionRef = shortUUID.generate();
 
     // ✅ Store Transaction Reference & Amount in User BEFORE Initiating Payment
     user.mchTransactionRef = mchTransactionRef;
     user.amount = amount;
-    user.paid = false; // Paid status remains false until webhook confirms
+    user.paid = false; // paid status remains false until the webhook confirms payment
     await user.save();
 
     console.log(`✅ Stored mchTransactionRef (${mchTransactionRef}) for user: ${email}`);
 
     // 🔥 Initiate Mobile Money Payment
     const transaction = await client.payment.collection.simple.chargeMobileMoney({
-      mchTransactionRef, // ✅ Use stored reference
+      mchTransactionRef, // use the stored reference
       amount,
       currencyCode: "XAF",
       description,
@@ -64,54 +63,29 @@ exports.processPayment = async (req, res) => {
 
     console.log("⏳ Payment in progress. Transaction ID:", transactionId);
 
-    // ✅ Handle Payment in Progress
+    // ✅ If status is PAYMENT_IN_PROGRESS, simply return a response telling the client that payment is in progress.
     if (status === "PAYMENT_IN_PROGRESS") {
-      console.log("⏳ Payment still in progress. Redirecting user...");
-
-      // Wrap redirect call in try/catch to handle duplicate request error
-      try {
-        const webTransaction = await client.payment.collection.simple.chargeByWebRedirect({
-          mchTransactionRef, // ✅ Use same stored reference
-          amount,
-          currencyCode: "XAF",
-          description,
-        });
-
-        if (webTransaction?.data?.links?.paymentAuthUrl) {
-          return res.status(202).json({
-            message: "Redirect user to complete payment.",
-            transactionId,
-            paymentUrl: webTransaction.data.links.paymentAuthUrl,
-          });
-        }
-      } catch (err) {
-        // If a duplicate request error is detected, we simply log and return that the payment is still in progress.
-        if (err.message && err.message.includes("Duplicate request detected")) {
-          console.warn("⚠️ Duplicate request for web redirect detected. Payment remains in progress.");
-          return res.status(202).json({
-            message: "Payment is in progress. Please complete the payment via your mobile wallet.",
-            transactionId,
-          });
-        }
-        // If it's another error, propagate it
-        throw err;
-      }
+      console.log("⏳ Payment is in progress. Awaiting user completion on mobile wallet.");
+      return res.status(200).json({
+        message: "Payment initiated. Please complete the payment in your mobile wallet. Your payment will be confirmed shortly.",
+        transactionId,
+        mchTransactionRef,
+      });
     }
 
-    // If the status is not PAYMENT_IN_PROGRESS, simply return the current state.
+    // For any other status, return a generic response.
     return res.status(200).json({
       message: "Payment initiated successfully. Awaiting webhook confirmation.",
       transactionId,
       mchTransactionRef,
     });
-
   } catch (error) {
     console.error("🚨 Payment processing error:", error);
     return res.status(500).json({ error: "Payment processing failed." });
   }
 };
 
-// 🔥 Tranzak Webhook - Update Paid Status Only After Webhook is Received
+// 🔥 Tranzak Webhook - Update Paid Status Only After Payment Completion
 exports.tranzakWebhook = async (req, res) => {
   try {
     console.log("📩 Received Webhook:", JSON.stringify(req.body, null, 2));
@@ -144,7 +118,7 @@ exports.tranzakWebhook = async (req, res) => {
       return res.status(200).json({ message: "Transaction already processed" });
     }
 
-    // ✅ Process Successful Payments from Webhook
+    // ✅ Process Successful Payment only after webhook confirms completion
     if (status === "SUCCESSFUL" || status === "COMPLETED") {
       user.paid = true;
       user.transactionId = transactionId;
@@ -156,7 +130,6 @@ exports.tranzakWebhook = async (req, res) => {
 
     console.log("⚠️ Webhook received non-success status:", status);
     return res.status(200).json({ message: "Payment not successful yet." });
-
   } catch (error) {
     console.error("🚨 Webhook processing error:", error);
     return res.sendStatus(500);
