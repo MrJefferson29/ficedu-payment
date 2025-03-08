@@ -125,10 +125,7 @@ exports.tranzakWebhook = async (req, res) => {
     const mchTransactionRef = resource.mchTransactionRef;
 
     if (!mchTransactionRef) {
-      console.error(
-        "❌ Missing transaction reference in webhook data:",
-        resource
-      );
+      console.error("❌ Missing transaction reference in webhook data:", resource);
       return res.status(400).json({ error: "Invalid webhook payload: missing mchTransactionRef" });
     }
 
@@ -141,9 +138,7 @@ exports.tranzakWebhook = async (req, res) => {
     }
 
     if (!user) {
-      console.error(
-        `❌ No user found for mchTransactionRef: ${mchTransactionRef}`
-      );
+      console.error(`❌ No user found for mchTransactionRef: ${mchTransactionRef}`);
       return res.status(404).json({ error: "User not found for transaction." });
     }
 
