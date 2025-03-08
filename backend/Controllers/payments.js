@@ -30,7 +30,8 @@ exports.processPayment = async (req, res) => {
       return res.status(404).json({ error: "User not found. Payment cannot be processed." });
     }
 
-    // ✅ Generate Unique Reference
+    // ✅ Generate Unique Reference for this transaction
+    // Optionally, you could also include a timestamp or random string here if needed
     const mchTransactionRef = shortUUID.generate();
 
     // ✅ Store Transaction Reference & Amount in User BEFORE Initiating Payment
@@ -63,32 +64,41 @@ exports.processPayment = async (req, res) => {
 
     console.log("⏳ Payment in progress. Transaction ID:", transactionId);
 
-    // ✅ Payment in Progress - Redirect to Web Payment
+    // ✅ Handle Payment in Progress
     if (status === "PAYMENT_IN_PROGRESS") {
       console.log("⏳ Payment still in progress. Redirecting user...");
 
-      const webTransaction = await client.payment.collection.simple.chargeByWebRedirect({
-        mchTransactionRef, // ✅ Use same stored reference
-        amount,
-        currencyCode: "XAF",
-        description,
-      });
-
-      if (webTransaction?.data?.links?.paymentAuthUrl) {
-        return res.status(202).json({
-          message: "Redirect user to complete payment.",
-          transactionId,
-          paymentUrl: webTransaction.data.links.paymentAuthUrl,
+      // Wrap redirect call in try/catch to handle duplicate request error
+      try {
+        const webTransaction = await client.payment.collection.simple.chargeByWebRedirect({
+          mchTransactionRef, // ✅ Use same stored reference
+          amount,
+          currencyCode: "XAF",
+          description,
         });
-      }
 
-      return res.status(202).json({
-        message: "Payment is in progress.",
-        transactionId,
-      });
+        if (webTransaction?.data?.links?.paymentAuthUrl) {
+          return res.status(202).json({
+            message: "Redirect user to complete payment.",
+            transactionId,
+            paymentUrl: webTransaction.data.links.paymentAuthUrl,
+          });
+        }
+      } catch (err) {
+        // If a duplicate request error is detected, we simply log and return that the payment is still in progress.
+        if (err.message && err.message.includes("Duplicate request detected")) {
+          console.warn("⚠️ Duplicate request for web redirect detected. Payment remains in progress.");
+          return res.status(202).json({
+            message: "Payment is in progress. Please complete the payment via your mobile wallet.",
+            transactionId,
+          });
+        }
+        // If it's another error, propagate it
+        throw err;
+      }
     }
 
-    // ✅ Response for Payment Initiated Successfully
+    // If the status is not PAYMENT_IN_PROGRESS, simply return the current state.
     return res.status(200).json({
       message: "Payment initiated successfully. Awaiting webhook confirmation.",
       transactionId,
@@ -134,7 +144,7 @@ exports.tranzakWebhook = async (req, res) => {
       return res.status(200).json({ message: "Transaction already processed" });
     }
 
-    // ✅ Process Successful Payments
+    // ✅ Process Successful Payments from Webhook
     if (status === "SUCCESSFUL" || status === "COMPLETED") {
       user.paid = true;
       user.transactionId = transactionId;
