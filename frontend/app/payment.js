@@ -1,4 +1,3 @@
-// PaymentScreen.js
 import React, { useState } from 'react';
 import {
   View,
@@ -19,17 +18,31 @@ const Payment = () => {
   const [loading, setLoading] = useState(false);
   const [transactionId, setTransactionId] = useState('');
 
+  const validateEmail = (email) => {
+    const emailRegex = /\S+@\S+\.\S+/;
+    return emailRegex.test(email);
+  };
+
   const handlePayment = async () => {
     if (!amount || !mobileWalletNumber || !description || !email) {
       Alert.alert('Error', 'Please fill in all fields.');
       return;
     }
-    
+
+    if (isNaN(parseFloat(amount)) || parseFloat(amount) <= 0) {
+      Alert.alert('Error', 'Please enter a valid amount.');
+      return;
+    }
+
+    if (!validateEmail(email)) {
+      Alert.alert('Error', 'Please enter a valid email.');
+      return;
+    }
+
     console.log('Current Transaction ID:', transactionId);
     setLoading(true);
 
     try {
-      // Replace with your actual backend endpoint
       const response = await fetch('https://ficedu-payment.onrender.com/process/payment', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -45,25 +58,17 @@ const Payment = () => {
 
       if (!response.ok) {
         Alert.alert('Error', data.error || 'Payment failed');
+      } else if (response.status === 202 && data.paymentUrl) {
+        // Open payment URL if required
+        setTransactionId(data.transactionId || '');
+        await WebBrowser.openBrowserAsync(data.paymentUrl);
       } else if (response.status === 200) {
-        // Payment initiated successfully (webhook will later confirm payment)
+        // Payment initiated successfully
         setTransactionId(data.transactionId);
         Alert.alert(
           'Payment Initiated',
           `Payment initiated successfully. Transaction ID: ${data.transactionId}\nPlease wait for confirmation.`
         );
-      } else if (response.status === 202) {
-        // Payment is in progress.
-        // If a paymentUrl is provided, open it. Otherwise, just inform the user.
-        if (data.paymentUrl) {
-          await WebBrowser.openBrowserAsync(data.paymentUrl);
-        } else {
-          setTransactionId(data.transactionId || '');
-          Alert.alert(
-            'Payment In Progress',
-            'Payment is in progress. Please complete the payment via your mobile wallet.'
-          );
-        }
       } else {
         Alert.alert('Error', 'Unexpected response from payment processing.');
       }
@@ -88,6 +93,7 @@ const Payment = () => {
       <TextInput
         style={styles.input}
         placeholder="Mobile Wallet Number"
+        keyboardType="phone-pad"
         value={mobileWalletNumber}
         onChangeText={setMobileWalletNumber}
       />
@@ -107,7 +113,7 @@ const Payment = () => {
       {loading ? (
         <ActivityIndicator size="large" color="#0000ff" />
       ) : (
-        <Button title="Pay Now" onPress={handlePayment} />
+        <Button title="Pay Now" onPress={handlePayment} disabled={loading} />
       )}
       {transactionId ? (
         <Text style={styles.success}>Transaction ID: {transactionId}</Text>
@@ -127,13 +133,14 @@ const styles = StyleSheet.create({
     fontSize: 24,
     marginBottom: 24,
     textAlign: 'center',
+    fontWeight: 'bold',
   },
   input: {
     height: 50,
     borderColor: '#ccc',
     borderWidth: 1,
     marginBottom: 16,
-    paddingHorizontal: 8,
+    paddingHorizontal: 10,
     borderRadius: 8,
   },
   success: {

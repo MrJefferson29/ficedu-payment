@@ -19,36 +19,34 @@ exports.processPayment = async (req, res) => {
   try {
     const { amount, mobileWalletNumber, description, email } = req.body;
 
-    // ✅ Validate Input
     if (!amount || !mobileWalletNumber || !description || !email) {
       return res.status(400).json({ error: "Missing required fields." });
     }
 
-    // ✅ Verify User Exists
     const user = await User.findOne({ email });
     if (!user) {
       return res.status(404).json({ error: "User not found. Payment cannot be processed." });
     }
 
-    // ✅ Generate Unique Reference for this transaction
     const mchTransactionRef = shortUUID.generate();
 
-    // ✅ Store Transaction Reference & Amount in User BEFORE Initiating Payment
     user.mchTransactionRef = mchTransactionRef;
     user.amount = amount;
-    user.paid = false; // paid status remains false until the webhook confirms payment
+    user.paid = false;
     await user.save();
 
     console.log(`✅ Stored mchTransactionRef (${mchTransactionRef}) for user: ${email}`);
 
-    // 🔥 Initiate Mobile Money Payment
+    // 🔥 Initiate Payment and Get Redirect URL
     const transaction = await client.payment.collection.simple.chargeMobileMoney({
-      mchTransactionRef, // use the stored reference
+      mchTransactionRef,
       amount,
       currencyCode: "XAF",
       description,
       payerNote: description,
       mobileWalletNumber,
+      callbackUrl: `${process.env.BACKEND_URL}/tranzak/webhook`,
+      returnUrl: `${process.env.FRONTEND_URL}/payment-success`, // Redirect after payment
     });
 
     if (!transaction || !transaction.data) {
@@ -56,34 +54,26 @@ exports.processPayment = async (req, res) => {
       return res.status(500).json({ error: "Payment initiation failed." });
     }
 
-    // ✅ Extract Transaction Info
     const { data } = transaction;
+    const redirectUrl = data?.redirectUrl || null; // Get the payment portal URL
     const transactionId = data?.transactionId || data?.requestId || "UNKNOWN_TRANSACTION_ID";
-    const status = data?.status;
 
-    console.log("⏳ Payment in progress. Transaction ID:", transactionId);
-
-    // ✅ If status is PAYMENT_IN_PROGRESS, simply return a response telling the client that payment is in progress.
-    if (status === "PAYMENT_IN_PROGRESS") {
-      console.log("⏳ Payment is in progress. Awaiting user completion on mobile wallet.");
-      return res.status(200).json({
-        message: "Payment initiated. Please complete the payment in your mobile wallet. Your payment will be confirmed shortly.",
-        transactionId,
-        mchTransactionRef,
-      });
+    if (!redirectUrl) {
+      return res.status(500).json({ error: "No redirect URL received from Tranzak." });
     }
 
-    // For any other status, return a generic response.
     return res.status(200).json({
-      message: "Payment initiated successfully. Awaiting webhook confirmation.",
+      message: "Payment initiated successfully.",
       transactionId,
       mchTransactionRef,
+      redirectUrl, // ✅ Return this to the frontend for WebView
     });
   } catch (error) {
     console.error("🚨 Payment processing error:", error);
     return res.status(500).json({ error: "Payment processing failed." });
   }
 };
+
 
 // 🔥 Tranzak Webhook - Update Paid Status Only After Payment Completion
 exports.tranzakWebhook = async (req, res) => {
