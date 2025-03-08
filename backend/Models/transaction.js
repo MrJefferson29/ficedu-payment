@@ -16,7 +16,6 @@ const TransactionSchema = new mongoose.Schema({
   },
   status: {
     type: String,
-    enum: ["INITIATED", "PENDING", "FAILED", "COMPLETED"],
     default: "INITIATED",
   },
   initiatedAt: {

@@ -1,8 +1,8 @@
 // paymentController.js
 const tranzak = require("tranzak-node").default;
 const shortUUID = require("short-uuid");
-const user = require('../Models/user');
-const Transaction = require('../Models/transaction'); // New transaction model
+const User = require('../Models/user'); // Ensure model name uses uppercase for clarity
+const Transaction = require('../Models/transaction');
 require("dotenv").config();
 
 const client = new tranzak({
@@ -21,7 +21,7 @@ exports.processPayment = async (req, res) => {
 
     // Initiate the mobile money payment via Tranzak
     console.log("Initiating payment with mobileWalletNumber:", mobileWalletNumber);
-    const transaction = await client.payment.collection.simple.chargeMobileMoney({
+    const transactionResponse = await client.payment.collection.simple.chargeMobileMoney({
       amount,
       currencyCode: "XAF",
       description,
@@ -31,30 +31,31 @@ exports.processPayment = async (req, res) => {
     });
 
     // Optionally refresh the transaction status if available
-    if (transaction.refresh) {
-      await transaction.refresh();
+    if (transactionResponse.refresh) {
+      await transactionResponse.refresh();
     }
-    console.log("Transaction response:", JSON.stringify(transaction, null, 2));
+    console.log("Transaction response:", JSON.stringify(transactionResponse, null, 2));
 
     // Extract relevant fields from the response
-    const status = transaction.data ? transaction.data.status : null;
-    const transactionId = transaction.data
-      ? transaction.data.transactionId || transaction.data.requestId
+    const status = transactionResponse.data ? transactionResponse.data.status : null;
+    const transactionId = transactionResponse.data
+      ? transactionResponse.data.transactionId || transactionResponse.data.requestId
       : null;
 
-    // Save the transaction info in the database for later reference
+    // Save the transaction info in the database for later reference.
+    // Set an initial status of PAYMENT_IN_PROGRESS if not already SUCCESSFUL or COMPLETED.
     await Transaction.create({
       transactionId,
-      email, // Store the user's email
+      email, // Store the user's email to later update their paid status
       amount,
-      status,
+      status: (status === "SUCCESSFUL" || status === "COMPLETED") ? status : "PAYMENT_IN_PROGRESS",
       initiatedAt: new Date(),
     });
 
-    // If payment is completed, process any additional fund transfers
+    // Handle the different statuses returned by Tranzak.
     if (status === "SUCCESSFUL" || status === "COMPLETED") {
       console.log("Transaction fully successful. Transaction ID:", transactionId);
-      // ... (handle transfers as before)
+      // (Additional fund transfers could be added here if needed.)
       return res.status(200).json({
         message: "Payment processed successfully.",
         transactionId,
@@ -150,7 +151,7 @@ exports.tranzakWebhook = async (req, res) => {
       }
 
       if (txn.email) {
-        // Ensure we don’t update already paid users unnecessarily
+        // Update the user's 'paid' status if not already updated
         const updatedUser = await User.findOneAndUpdate(
           { email: txn.email, paid: false },
           { paid: true },
