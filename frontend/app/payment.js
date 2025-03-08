@@ -1,78 +1,62 @@
-import React, { useState } from "react";
-import { View, Text, TextInput, TouchableOpacity, ActivityIndicator, Alert } from "react-native";
-import { WebView } from "react-native-webview";
+// PaymentScreen.js
+import React, { useState } from 'react';
+import { View, Button, ActivityIndicator, Alert, StyleSheet } from 'react-native';
+import * as WebBrowser from 'expo-web-browser';
 
 const Payment = () => {
-  const [amount, setAmount] = useState("");
-  const [mobileWalletNumber, setMobileWalletNumber] = useState("");
-  const [email, setEmail] = useState("");
   const [loading, setLoading] = useState(false);
-  const [redirectUrl, setRedirectUrl] = useState(null);
 
-  const handlePayment = async () => {
-    if (!amount || !mobileWalletNumber || !email) {
-      Alert.alert("Error", "Please fill in all fields.");
-      return;
-    }
-
+  const initiatePayment = async () => {
     setLoading(true);
-    
     try {
-      const response = await fetch("https://ficedu-payment.onrender.com/process/payment", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({ amount, mobileWalletNumber, description: "Payment", email }),
+      // Replace with your actual backend endpoint URL
+      const response = await fetch('https://ficedu-payment.onrender.com/process/payment', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          amount: 2500,
+          mobileWalletNumber: '237679691817',
+          description: 'Test Payment',
+          email: "thejefferson29@gmail.com"
+        }),
       });
-
+      
       const data = await response.json();
-      setLoading(false);
 
-      if (response.ok && data.redirectUrl) {
-        setRedirectUrl(data.redirectUrl);
+      if (response.ok) {
+        if (data.paymentUrl) {
+          // Open the payment URL in the browser
+          await WebBrowser.openBrowserAsync(data.paymentUrl);
+        } else {
+          Alert.alert("Error", "Payment URL was not provided by the server.");
+        }
       } else {
-        Alert.alert("Error", data.error || "Payment initiation failed.");
+        Alert.alert("Error", data.error || "Payment processing failed.");
       }
     } catch (error) {
+      Alert.alert("Error", error.message);
+    } finally {
       setLoading(false);
-      Alert.alert("Error", "Failed to process payment.");
     }
   };
 
-  if (redirectUrl) {
-    return <WebView source={{ uri: redirectUrl }} />;
-  }
-
   return (
-    <View style={{ flex: 1, padding: 20, justifyContent: "center" }}>
-      <Text style={{ fontSize: 24, fontWeight: "bold", marginBottom: 20 }}>Make a Payment</Text>
-      <TextInput
-        placeholder="Enter Amount"
-        keyboardType="numeric"
-        value={amount}
-        onChangeText={setAmount}
-        style={{ borderBottomWidth: 1, marginBottom: 20, padding: 10 }}
-      />
-      <TextInput
-        placeholder="Mobile Wallet Number"
-        keyboardType="numeric"
-        value={mobileWalletNumber}
-        onChangeText={setMobileWalletNumber}
-        style={{ borderBottomWidth: 1, marginBottom: 20, padding: 10 }}
-      />
-      <TextInput
-        placeholder="Email"
-        keyboardType="email-address"
-        value={email}
-        onChangeText={setEmail}
-        style={{ borderBottomWidth: 1, marginBottom: 20, padding: 10 }}
-      />
-      <TouchableOpacity onPress={handlePayment} style={{ backgroundColor: "#4CAF50", padding: 15, borderRadius: 5 }}>
-        {loading ? <ActivityIndicator color="white" /> : <Text style={{ color: "white", textAlign: "center" }}>Pay Now</Text>}
-      </TouchableOpacity>
+    <View style={styles.container}>
+      {loading ? (
+        <ActivityIndicator size="large" />
+      ) : (
+        <Button title="Pay Now" onPress={initiatePayment} />
+      )}
     </View>
   );
 };
+
+const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center'
+  }
+});
 
 export default Payment;
