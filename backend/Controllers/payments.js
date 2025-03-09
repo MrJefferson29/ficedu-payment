@@ -128,55 +128,75 @@ exports.processPayment = async (req, res) => {
 exports.tranzakWebhook = async (req, res) => {
   try {
     console.log("Received Tranzak webhook payload:", JSON.stringify(req.body, null, 2));
-
     const { eventType, resource } = req.body;
+    
+    // Make sure the payload contains the stable reference.
     if (!resource || !resource.mchTransactionRef) {
       console.error("Invalid webhook payload: missing resource.mchTransactionRef", req.body);
       return res.status(400).json({ error: "Invalid webhook payload" });
     }
-
-    // Use the stable mchTransactionRef to match the transaction
-    const transactionId = resource.mchTransactionRef;
-    const event = eventType.toUpperCase(); // Normalize event type
-
-    if (event === "REQUEST.INITIATED") {
-      console.log("Transaction initiated. Transaction ID:", transactionId);
-      // You might want to update the transaction record here if needed
-    } else if (event === "REQUEST.COMPLETED") {
-      console.log("Transaction completed successfully. Transaction ID:", transactionId);
-
-      // Update the transaction record in the database using the stable transactionId
-      const txn = await Transaction.findOneAndUpdate(
-        { transactionId },
-        { status: "COMPLETED", completedAt: new Date() },
-        { new: true }
-      );
-
-      if (!txn) {
-        console.warn("Transaction record not found for ID:", transactionId);
-        return res.status(404).json({ error: "Transaction not found" });
-      }
-
-      // Update the user's paid status based on the stored email.
-      if (txn.email) {
-        const updatedUser = await User.findOneAndUpdate(
-          { email: txn.email, paid: false },
-          { paid: true },
-          { new: true }
-        );
-
-        if (updatedUser) {
-          console.log(`User ${txn.email} payment status updated to PAID.`);
+    
+    // Use the stable mchTransactionRef for matching.
+    const stableId = resource.mchTransactionRef;
+    const event = eventType.toUpperCase();
+    
+    // Find the transaction record by the stable identifier.
+    const txn = await Transaction.findOne({ transactionId: stableId });
+    if (!txn) {
+      console.warn("Transaction record not found for stable ID:", stableId);
+      return res.status(404).json({ error: "Transaction not found" });
+    }
+    
+    // Idempotency: If the transaction is already marked as COMPLETED, ignore subsequent events.
+    if (txn.status === "COMPLETED") {
+      console.log(`Transaction ${stableId} is already completed. Ignoring duplicate webhook.`);
+      return res.sendStatus(200);
+    }
+    
+    // Distinguish between different phases.
+    // For example, if you can determine that this webhook represents final confirmation,
+    // you may check for additional fields, a delay between events, or compare the transactionId
+    // provided by Tranzak.
+    if (event === "REQUEST.COMPLETED") {
+      // Here, add any additional checks if needed to determine that the payment is truly final.
+      // For example, you could check if resource.transactionId exists and has a valid value.
+      if (resource.transactionId) {
+        console.log("Final confirmation received. Transaction stable ID:", stableId);
+        
+        // Update the transaction status to COMPLETED.
+        txn.status = "COMPLETED";
+        txn.completedAt = new Date();
+        await txn.save();
+        
+        // Update the user's paid status if not already updated.
+        if (txn.email) {
+          const updatedUser = await User.findOneAndUpdate(
+            { email: txn.email, paid: false },
+            { paid: true },
+            { new: true }
+          );
+          
+          if (updatedUser) {
+            console.log(`User ${txn.email} payment status updated to PAID.`);
+          } else {
+            console.warn(`User with email ${txn.email} not found or already paid.`);
+          }
         } else {
-          console.warn(`User with email ${txn.email} not found or already paid.`);
+          console.warn("Transaction email missing. Cannot update user status.");
         }
       } else {
-        console.warn("Transaction email missing. Cannot update user status.");
+        // If there isn’t enough data to conclude final confirmation,
+        // log and ignore the event.
+        console.log("Webhook received for REQUEST.COMPLETED but no transactionId provided. Ignoring.");
       }
+    } else if (event === "REQUEST.INITIATED") {
+      console.log("Received initiation webhook. Transaction stable ID:", stableId);
+      // Optionally update the transaction record to note that initiation was confirmed.
+      // Do not update the user's paid status here.
     } else {
-      console.log("Unhandled event type:", event, "for transaction:", transactionId);
+      console.log("Unhandled event type:", event, "for transaction stable ID:", stableId);
     }
-
+    
     return res.sendStatus(200);
   } catch (error) {
     console.error("Error handling webhook:", error);
