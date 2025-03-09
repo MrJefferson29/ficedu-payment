@@ -157,35 +157,41 @@ exports.processPayment = async (req, res) => {
 
 exports.tranzakWebhook = async (req, res) => {
   try {
-    // Log full webhook payload for debugging
-    console.log("Received Tranzak webhook payload:", JSON.stringify(req.body, null, 2));
-
-    const { data } = req.body;
-    if (!data || !data.requestId) {
-      console.error("Invalid webhook payload:", req.body);
+    const { eventType, resource } = req.body;
+    if (!resource || !resource.mchTransactionRef) {
+      console.error("Invalid webhook payload: missing resource.mchTransactionRef");
       return res.status(400).json({ error: "Invalid webhook payload" });
     }
-
-    const transactionId = data.requestId;
-
-    // Process transaction status based on the webhook payload
-    switch (data.status) {
-      case "SUCCESSFUL":
-      case "COMPLETED":
-        console.log("Transaction completed successfully. Transaction ID:", transactionId);
-        // Update server records here if needed
-        break;
-
-      case "PAYMENT_IN_PROGRESS":
-        console.log("Payment is still in progress for transaction:", transactionId);
-        // Optionally notify or log that the payment is in progress
-        break;
-
-      default:
-        console.log("Received unsupported transaction status:", data.status);
-        break;
+    
+    const stableId = resource.mchTransactionRef;
+    const event = eventType.toUpperCase();
+    
+    // Retrieve the transaction using the stable reference
+    const txn = await Transaction.findOne({ transactionId: stableId });
+    if (!txn) {
+      console.warn("Transaction record not found for stable ID:", stableId);
+      return res.status(404).json({ error: "Transaction not found" });
     }
-
+    
+    // If already completed, ignore duplicate events
+    if (txn.status === "COMPLETED") {
+      return res.sendStatus(200);
+    }
+    
+    if (event === "REQUEST.COMPLETED" && resource.transactionId) {
+      // This confirms full payment
+      txn.status = "COMPLETED";
+      txn.completedAt = new Date();
+      await txn.save();
+      
+      if (txn.email) {
+        await User.findOneAndUpdate(
+          { email: txn.email, paid: false },
+          { paid: true }
+        );
+      }
+    }
+    
     return res.sendStatus(200);
   } catch (error) {
     console.error("Error handling webhook:", error);
