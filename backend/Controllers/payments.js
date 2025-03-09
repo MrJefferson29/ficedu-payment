@@ -1,7 +1,7 @@
 // paymentController.js
 const tranzak = require("tranzak-node").default;
 const shortUUID = require("short-uuid");
-const User = require('../Models/user'); // Ensure correct model naming (uppercase)
+const User = require('../Models/user');
 const Transaction = require('../Models/transaction');
 require("dotenv").config();
 
@@ -19,14 +19,16 @@ exports.processPayment = async (req, res) => {
       return res.status(400).json({ error: "Missing required fields." });
     }
 
-    // Initiate the mobile money payment via Tranzak
+    // Generate a stable reference for the transaction
+    const mchTransactionRef = shortUUID.generate();
     console.log("Initiating payment with mobileWalletNumber:", mobileWalletNumber);
+
     const transactionResponse = await client.payment.collection.simple.chargeMobileMoney({
       amount,
       currencyCode: "XAF",
       description,
       payerNote: description,
-      mchTransactionRef: shortUUID.generate(),
+      mchTransactionRef, // pass the stable reference here
       mobileWalletNumber,
     });
 
@@ -38,9 +40,9 @@ exports.processPayment = async (req, res) => {
 
     // Extract relevant fields from the response
     const status = transactionResponse.data ? transactionResponse.data.status : null;
-    const transactionId = transactionResponse.data
-      ? transactionResponse.data.transactionId || transactionResponse.data.requestId
-      : null;
+    // Use the stable mchTransactionRef as the transaction identifier, 
+    // or fallback to requestId if needed
+    const transactionId = mchTransactionRef;
 
     if (!transactionId) {
       console.error("No transaction ID received from Tranzak.");
@@ -48,9 +50,9 @@ exports.processPayment = async (req, res) => {
     }
 
     // Save the transaction info in the database for later reference.
-    // Set an initial status of PAYMENT_IN_PROGRESS unless already SUCCESSFUL or COMPLETED.
     await Transaction.create({
-      transactionId,
+      transactionId,            // using the stable mchTransactionRef
+      originalRequestId: transactionResponse.data.requestId, // optionally store the original requestId
       email, // store the user's email for later update
       amount,
       status: (status === "SUCCESSFUL" || status === "COMPLETED") ? status : "PAYMENT_IN_PROGRESS",
@@ -128,21 +130,22 @@ exports.tranzakWebhook = async (req, res) => {
     console.log("Received Tranzak webhook payload:", JSON.stringify(req.body, null, 2));
 
     const { eventType, resource } = req.body;
-    if (!resource || !resource.requestId) {
-      console.error("Invalid webhook payload: missing resource.requestId", req.body);
+    if (!resource || !resource.mchTransactionRef) {
+      console.error("Invalid webhook payload: missing resource.mchTransactionRef", req.body);
       return res.status(400).json({ error: "Invalid webhook payload" });
     }
 
-    const transactionId = resource.requestId;
+    // Use the stable mchTransactionRef to match the transaction
+    const transactionId = resource.mchTransactionRef;
     const event = eventType.toUpperCase(); // Normalize event type
 
     if (event === "REQUEST.INITIATED") {
       console.log("Transaction initiated. Transaction ID:", transactionId);
-      // Optionally update transaction status in DB if needed
+      // You might want to update the transaction record here if needed
     } else if (event === "REQUEST.COMPLETED") {
       console.log("Transaction completed successfully. Transaction ID:", transactionId);
 
-      // Update the transaction record in the database
+      // Update the transaction record in the database using the stable transactionId
       const txn = await Transaction.findOneAndUpdate(
         { transactionId },
         { status: "COMPLETED", completedAt: new Date() },
