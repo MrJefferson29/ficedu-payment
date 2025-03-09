@@ -24,7 +24,7 @@ exports.processPayment = async (req, res) => {
       currencyCode: "XAF",
       description,
       payerNote: description,
-      mchTransactionRef: shortUUID.generate(),
+      mchTransactionRef: shortUUID.generate(), // Stable identifier for this transaction
       mobileWalletNumber,
     });
 
@@ -45,56 +45,9 @@ exports.processPayment = async (req, res) => {
     // Successful Payment Flow
     if (status === "SUCCESSFUL" || status === "COMPLETED") {
       console.log("Transaction fully successful. Transaction ID:", transactionId);
-
-      // Optional fund transfers if merchant info is provided
-      if (transaction.data.merchant) {
-        let accounts;
-        try {
-          accounts = await client.account.list();
-        } catch (err) {
-          console.error("Failed to fetch accounts:", err);
-          return res.status(500).json({ error: "Failed to fetch collection accounts." });
-        }
-
-        const collectionAccount = accounts.find(
-          (acc) => acc.data.accountId === transaction.data.merchant.accountId
-        );
-
-        if (!collectionAccount) {
-          console.warn("Collection account not found, proceeding without fund transfers.");
-        } else {
-          // Calculate the transfer amount (deducting a 7% fee)
-          const transferAmount = amount * 0.93;
-          try {
-            // Transfer funds to the payout account
-            await client.payment.transfer.simple.toPayoutAccount({
-              amount: transferAmount,
-              currencyCode: "XAF",
-              customTransactionRef: shortUUID.generate(),
-              description: "For payouts",
-              payeeNote: "For payouts.",
-              fundingAccountId: collectionAccount.data.accountId,
-            });
-
-            // Transfer funds to the mobile money wallet
-            await client.payment.transfer.simple.toMobileMoney({
-              payeeAccountId: mobileWalletNumber,
-              amount: transferAmount,
-              currencyCode: "XAF",
-              customTransactionRef: shortUUID.generate(),
-              description: "Procurement of materials",
-              payeeNote: "Procurement of materials",
-            });
-          } catch (transferError) {
-            console.error("Error transferring funds:", transferError);
-            return res.status(500).json({ error: "Fund transfer failed." });
-          }
-        }
-      }
-
       return res.status(200).json({
         message: "Payment processed successfully.",
-        transactionId: transactionId,
+        transactionId,
       });
     } else if (status === "PAYMENT_IN_PROGRESS") {
       console.log("Payment is still in progress. Transaction ID:", transactionId);
@@ -115,13 +68,13 @@ exports.processPayment = async (req, res) => {
         console.error("Web Transaction response missing payment URL:", webTransaction);
         return res.status(202).json({
           message: "Payment is in progress. Please wait for completion.",
-          transactionId: transactionId,
+          transactionId,
         });
       }
 
       return res.status(202).json({
         message: "Redirect user to complete payment.",
-        transactionId: transactionId,
+        transactionId,
         paymentUrl: webTransaction.data.links.paymentAuthUrl,
       });
     } else {
@@ -163,33 +116,16 @@ exports.tranzakWebhook = async (req, res) => {
       return res.status(400).json({ error: "Invalid webhook payload" });
     }
     
-    const stableId = resource.mchTransactionRef;
+    const stableId = resource.mchTransactionRef; // Stable identifier for the transaction
     const event = eventType.toUpperCase();
     
-    // Retrieve the transaction using the stable reference
-    const txn = await Transaction.findOne({ transactionId: stableId });
-    if (!txn) {
-      console.warn("Transaction record not found for stable ID:", stableId);
-      return res.status(404).json({ error: "Transaction not found" });
-    }
-    
-    // If already completed, ignore duplicate events
-    if (txn.status === "COMPLETED") {
-      return res.sendStatus(200);
-    }
-    
+    // Log events based on type
     if (event === "REQUEST.COMPLETED" && resource.transactionId) {
-      // This confirms full payment
-      txn.status = "COMPLETED";
-      txn.completedAt = new Date();
-      await txn.save();
-      
-      if (txn.email) {
-        await User.findOneAndUpdate(
-          { email: txn.email, paid: false },
-          { paid: true }
-        );
-      }
+      console.log(`Transaction with stable id ${stableId} completed successfully. Transaction ID: ${resource.transactionId}`);
+    } else if (event === "REQUEST.INITIATED") {
+      console.log(`Transaction with stable id ${stableId} initiated.`);
+    } else {
+      console.log(`Received event ${event} for transaction stable id ${stableId}`);
     }
     
     return res.sendStatus(200);
