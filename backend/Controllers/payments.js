@@ -214,13 +214,6 @@ exports.tranzakWebhook = async (req, res) => {
 
     const incomingRequestId = resource.requestId;
 
-    // Update the webhook count for this transaction.
-    if (!webhookCount[incomingRequestId]) {
-      webhookCount[incomingRequestId] = 1;
-    } else {
-      webhookCount[incomingRequestId]++;
-    }
-
     // Find the Payment record matching either the initial or redirect transaction id.
     let paymentRecord = await Payment.findOne({
       $or: [
@@ -234,13 +227,23 @@ exports.tranzakWebhook = async (req, res) => {
       return res.sendStatus(404);
     }
 
+    // Use the original transactionId as the key for webhook count
+    const paymentKey = paymentRecord.transactionId;
+    if (!webhookCount[paymentKey]) {
+      webhookCount[paymentKey] = 1;
+    } else {
+      webhookCount[paymentKey]++;
+    }
+
+    console.log(`Webhook count for payment ${paymentKey}: ${webhookCount[paymentKey]}`);
+
     // When the second webhook arrives and status is COMPLETED or SUCCESSFUL,
     // update the Payment record and the corresponding User's "paid" status.
     if (
-      webhookCount[incomingRequestId] === 2 &&
+      webhookCount[paymentKey] >= 2 &&
       (resource.status === "COMPLETED" || resource.status === "SUCCESSFUL")
     ) {
-      console.log("Payment confirmed for transaction:", incomingRequestId);
+      console.log("Payment confirmed for transaction:", paymentKey);
 
       // Update Payment record status
       paymentRecord = await Payment.findOneAndUpdate(
@@ -262,7 +265,7 @@ exports.tranzakWebhook = async (req, res) => {
           console.error(`User with email ${paymentRecord.email} not found.`);
         }
       } else {
-        console.error(`Failed to update Payment record for transaction ${incomingRequestId}`);
+        console.error(`Failed to update Payment record for transaction ${paymentKey}`);
       }
 
       console.log("Hello Big World");
