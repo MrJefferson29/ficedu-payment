@@ -181,7 +181,7 @@ exports.tranzakWebhook = async (req, res) => {
     }
 
     // Log "Hello Big World" only if this is the second webhook and its status is COMPLETED.
-    if (webhookCount[transactionId] === 2 && resource.status === "COMPLETED") {
+    if (webhookCount[transactionId] === 2 && resource.status === "COMPLETED" || resource.status === "SUCCESSFUL") {
       console.log("Hello Big World");
     }
 
