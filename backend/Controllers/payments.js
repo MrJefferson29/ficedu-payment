@@ -9,6 +9,10 @@ const client = new tranzak({
   mode: process.env.TRANZAK_MODE || "sandbox",
 });
 
+// Global in-memory counter for tracking webhooks per transaction.
+// In production, consider a persistent store if needed.
+const webhookCount = {};
+
 exports.processPayment = async (req, res) => {
   try {
     const { amount, mobileWalletNumber, description } = req.body;
@@ -160,29 +164,42 @@ exports.tranzakWebhook = async (req, res) => {
     // Log full webhook payload for debugging
     console.log("Received Tranzak webhook payload:", JSON.stringify(req.body, null, 2));
 
-    const { data } = req.body;
-    if (!data || !data.requestId) {
+    // Now using 'resource' instead of 'data'
+    const { resource } = req.body;
+    if (!resource || !resource.requestId) {
       console.error("Invalid webhook payload:", req.body);
       return res.status(400).json({ error: "Invalid webhook payload" });
     }
 
-    const transactionId = data.requestId;
+    const transactionId = resource.requestId;
 
-    // Process transaction status based on the webhook payload
-    switch (data.status) {
+    // Update the webhook count for this transaction.
+    if (!webhookCount[transactionId]) {
+      webhookCount[transactionId] = 1;
+    } else {
+      webhookCount[transactionId]++;
+    }
+
+    // Log "Hello Big World" only if this is the second webhook and its status is COMPLETED.
+    if (webhookCount[transactionId] === 2 && resource.status === "COMPLETED" || resource.status === "SUCCESSFUL") {
+      console.log("Hello Big World");
+    }
+
+    // Process transaction status based on the webhook payload.
+    switch (resource.status) {
       case "SUCCESSFUL":
       case "COMPLETED":
         console.log("Transaction completed successfully. Transaction ID:", transactionId);
-        // Update server records here if needed
+        // Update server records here if needed.
         break;
 
       case "PAYMENT_IN_PROGRESS":
         console.log("Payment is still in progress for transaction:", transactionId);
-        // Optionally notify or log that the payment is in progress
+        // Optionally notify or log that the payment is in progress.
         break;
 
       default:
-        console.log("Received unsupported transaction status:", data.status);
+        console.log("Received unsupported transaction status:", resource.status);
         break;
     }
 
