@@ -21,6 +21,5 @@ router.use('/courses', coursesRoute, videoCourseRoute)
 router.use('/question', questionsRoute)
 router.use('/features', featureRoute)
 router.use('/process', payment)
-router.post("/tranzak-webhook", tranzakWebhook);
 
 module.exports = router;
