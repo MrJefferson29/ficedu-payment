@@ -1,4 +1,3 @@
-// paymentController.js
 const tranzak = require("tranzak-node").default;
 const shortUUID = require("short-uuid");
 require("dotenv").config();
@@ -10,12 +9,13 @@ const client = new tranzak({
 });
 
 // Global in-memory counter for tracking webhooks per transaction.
-// In production, consider a persistent store if needed.
+// In production, consider using a persistent store (e.g., database) for better scalability.
 const webhookCount = {};
 
 exports.processPayment = async (req, res) => {
   try {
     const { amount, mobileWalletNumber, description } = req.body;
+
     if (!amount || !mobileWalletNumber || !description) {
       console.error("Missing required fields:", req.body);
       return res.status(400).json({ error: "Missing required fields." });
@@ -181,7 +181,10 @@ exports.tranzakWebhook = async (req, res) => {
     }
 
     // Log "Hello Big World" only if this is the second webhook and its status is COMPLETED.
-    if (webhookCount[transactionId] === 2 && resource.status === "COMPLETED" || resource.status === "SUCCESSFUL") {
+    if (
+      webhookCount[transactionId] === 2 &&
+      (resource.status === "COMPLETED" || resource.status === "SUCCESSFUL")
+    ) {
       console.log("Hello Big World");
     }
 
