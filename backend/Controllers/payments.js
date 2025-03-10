@@ -9,14 +9,19 @@ const client = new tranzak({
   mode: process.env.TRANZAK_MODE || "sandbox",
 });
 
+// Import the Payment and User models
+const Payment = require('../Models/payments');
+const User = require('../Models/user');
+
 // Global in-memory counter for tracking webhooks per transaction.
 // In production, consider a persistent store if needed.
 const webhookCount = {};
 
 exports.processPayment = async (req, res) => {
   try {
-    const { amount, mobileWalletNumber, description } = req.body;
-    if (!amount || !mobileWalletNumber || !description) {
+    // Now including email in the request body
+    const { amount, mobileWalletNumber, description, email } = req.body;
+    if (!amount || !mobileWalletNumber || !description || !email) {
       console.error("Missing required fields:", req.body);
       return res.status(400).json({ error: "Missing required fields." });
     }
@@ -45,6 +50,19 @@ exports.processPayment = async (req, res) => {
     const transactionId = transaction.data
       ? transaction.data.transactionId || transaction.data.requestId
       : null;
+
+    // Create a Payment record in the database to track this payment
+    try {
+      await Payment.create({
+        transactionId: transactionId,
+        email,
+        amount,
+        status: "initiated"
+      });
+    } catch (err) {
+      console.error("Error creating Payment record:", err);
+      // Continue processing even if logging fails
+    }
 
     // Successful Payment Flow
     if (status === "SUCCESSFUL" || status === "COMPLETED") {
@@ -180,8 +198,37 @@ exports.tranzakWebhook = async (req, res) => {
       webhookCount[transactionId]++;
     }
 
-    // Log "Hello Big World" only if this is the second webhook and its status is COMPLETED.
-    if (webhookCount[transactionId] === 2 && resource.status === "COMPLETED" || resource.status === "SUCCESSFUL") {
+    // When the second webhook arrives and status is COMPLETED or SUCCESSFUL,
+    // update the Payment record and the corresponding User's "paid" status.
+    if (
+      webhookCount[transactionId] === 2 &&
+      (resource.status === "COMPLETED" || resource.status === "SUCCESSFUL")
+    ) {
+      console.log("Payment confirmed for transaction:", transactionId);
+
+      // Update Payment record status
+      const paymentRecord = await Payment.findOneAndUpdate(
+        { transactionId },
+        { status: "completed" },
+        { new: true }
+      );
+
+      if (paymentRecord) {
+        // Update User's paid status
+        const userUpdate = await User.findOneAndUpdate(
+          { email: paymentRecord.email },
+          { paid: true },
+          { new: true }
+        );
+        if (userUpdate) {
+          console.log(`User ${paymentRecord.email} marked as paid.`);
+        } else {
+          console.error(`User with email ${paymentRecord.email} not found.`);
+        }
+      } else {
+        console.error(`No Payment record found for transaction ${transactionId}`);
+      }
+
       console.log("Hello Big World");
     }
 
@@ -190,7 +237,7 @@ exports.tranzakWebhook = async (req, res) => {
       case "SUCCESSFUL":
       case "COMPLETED":
         console.log("Transaction completed successfully. Transaction ID:", transactionId);
-        // Update server records here if needed.
+        // Additional server record updates can be done here.
         break;
 
       case "PAYMENT_IN_PROGRESS":
