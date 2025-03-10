@@ -160,6 +160,15 @@ exports.processPayment = async (req, res) => {
 };
 
 exports.tranzakWebhook = async (req, res) => {
+  console.log("Webhook received and processing...");
+console.log("Webhook event type:", req.body.eventType);
+console.log("Transaction status:", req.body.resource.status);
+
+if (req.body.resource.status === "SUCCESSFUL") {
+    console.log("Hello Big World");
+}
+console.log("Webhook processing completed.");
+
   try {
     // Log full webhook payload for debugging
     console.log("Received Tranzak webhook payload:", JSON.stringify(req.body, null, 2));
