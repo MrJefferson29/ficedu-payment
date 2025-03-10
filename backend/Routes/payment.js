@@ -7,6 +7,6 @@ const router = express.Router();
 router.post("/payment", processPayment);
 
 // Webhook route (Tranzak will send events here)
-router.post("/process/tranzak-webhook", webhookHandler);
+router.post("/tranzak-webhook", webhookHandler);
 
 module.exports = router;
