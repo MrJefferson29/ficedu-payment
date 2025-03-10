@@ -1,46 +1,18 @@
-require("dotenv").config();
 const tranzak = require("tranzak-node").default;
-
 const shortUUID = require("short-uuid");
+require("dotenv").config();
 
-// Initialize Tranzak Client
+// Initialize the Tranzak client
 const client = new tranzak({
   appId: process.env.TRANZAK_APP_ID,
   appKey: process.env.TRANZAK_APP_KEY,
   mode: process.env.TRANZAK_MODE || "sandbox",
 });
 
-// Helper Function for Web Redirection
-const initiateWebRedirection = async (amount, description) => {
-  try {
-    const webTransaction = await client.payment.collection.simple.chargeByWebRedirect({
-      mchTransactionRef: shortUUID.generate(),
-      amount,
-      currencyCode: "XAF",
-      description,
-    });
-
-    if (
-      !webTransaction ||
-      !webTransaction.data ||
-      !webTransaction.data.links ||
-      !webTransaction.data.links.paymentAuthUrl
-    ) {
-      throw new Error("Web Transaction response missing payment URL.");
-    }
-
-    return webTransaction.data.links.paymentAuthUrl;
-  } catch (error) {
-    console.error("Error initiating web redirection:", error);
-    throw error;
-  }
-};
-
-// Process Payment Request
+// Process Payment Function (for context)
 exports.processPayment = async (req, res) => {
   try {
     const { amount, mobileWalletNumber, description } = req.body;
-
     if (!amount || !mobileWalletNumber || !description) {
       console.error("Missing required fields:", req.body);
       return res.status(400).json({ error: "Missing required fields." });
@@ -52,58 +24,74 @@ exports.processPayment = async (req, res) => {
       currencyCode: "XAF",
       description,
       payerNote: description,
-      mchTransactionRef: shortUUID.generate(),
+      mchTransactionRef: shortUUID.generate(), // Custom stable reference
       mobileWalletNumber,
     });
 
+    // If the transaction object supports refresh, update its status.
     if (transaction.refresh) {
       await transaction.refresh();
     }
 
     console.log("Transaction response:", JSON.stringify(transaction, null, 2));
     const status = transaction.data ? transaction.data.status : null;
-    const transactionId = transaction.data ? (transaction.data.transactionId || transaction.data.requestId) : null;
+    const transactionId = transaction.data
+      ? transaction.data.transactionId || transaction.data.requestId
+      : null;
 
-    switch (status) {
-      case "SUCCESSFUL":
-      case "COMPLETED":
-        console.log("Transaction successful. Transaction ID:", transactionId);
-        return res.status(200).json({
-          message: "Payment processed successfully.",
-          transactionId,
-        });
-
-      case "PAYMENT_IN_PROGRESS":
-      case "PAYER_REDIRECT_REQUIRED":
-        console.log("Payment requires user redirection. Transaction ID:", transactionId);
-        try {
-          const paymentUrl = await initiateWebRedirection(amount, description);
-          return res.status(202).json({
-            message: "Redirect user to complete payment.",
-            transactionId,
-            paymentUrl,
-          });
-        } catch (webError) {
-          console.error("Web Transaction error:", webError);
-          return res.status(500).json({
-            error: "Payment redirection failed. Please try again later.",
-          });
-        }
-
-      case "FAILED":
-      case "CANCELLED":
-      case "CANCELLED_BY_PAYER":
-        console.error(`Payment failed with status: ${status}`);
-        return res.status(400).json({
-          error: `Payment failed: ${status}. Please try again.`,
-        });
-
-      default:
-        console.warn(`Unexpected payment status: ${status}`);
+    if (status === "SUCCESSFUL" || status === "COMPLETED") {
+      console.log("Transaction fully successful. Transaction ID:", transactionId);
+      return res.status(200).json({
+        message: "Payment processed successfully.",
+        transactionId,
+      });
+    } else if (status === "PAYMENT_IN_PROGRESS") {
+      console.log("Payment is still in progress. Transaction ID:", transactionId);
+      // Initiate a web redirection flow for additional payer authentication
+      const webTransaction = await client.payment.collection.simple.chargeByWebRedirect({
+        mchTransactionRef: shortUUID.generate(),
+        amount,
+        currencyCode: "XAF",
+        description,
+      });
+      if (
+        !webTransaction ||
+        !webTransaction.data ||
+        !webTransaction.data.links ||
+        !webTransaction.data.links.paymentAuthUrl
+      ) {
+        console.error("Web Transaction response missing payment URL:", webTransaction);
         return res.status(202).json({
-          message: "Payment is being processed. Check again later.",
+          message: "Payment is in progress. Please wait for completion.",
           transactionId,
         });
+      }
+      return res.status(202).json({
+        message: "Redirect user to complete payment.",
+        transactionId,
+        paymentUrl: webTransaction.data.links.paymentAuthUrl,
+      });
+    } else {
+      console.log("Fallback redirection for transaction. Status:", status);
+      const webTransaction = await client.payment.collection.simple.chargeByWebRedirect({
+        mchTransactionRef: shortUUID.generate(),
+        amount,
+        currencyCode: "XAF",
+        description,
+      });
+      if (
+        !webTransaction ||
+        !webTransaction.data ||
+        !webTransaction.data.links ||
+        !webTransaction.data.links.paymentAuthUrl
+      ) {
+        console.error("Fallback web Transaction response missing payment URL:", webTransaction);
+        return res.status(500).json({ error: "Payment redirection failed." });
+      }
+      return res.status(202).json({
+        message: "Redirect user to complete payment.",
+        paymentUrl: webTransaction.data.links.paymentAuthUrl,
+      });
     }
   } catch (error) {
     console.error("Error processing payment:", error);
@@ -111,40 +99,54 @@ exports.processPayment = async (req, res) => {
   }
 };
 
-// Handle Webhook Notifications
-exports.webhookHandler = async (req, res) => {
+// Updated Webhook Handler with Post-Notification Verification
+exports.tranzakWebhook = async (req, res) => {
   try {
-    console.log("Received Webhook Event:", JSON.stringify(req.body, null, 2));
     const { eventType, resource } = req.body;
-
-    if (!resource || !resource.mchTransactionRef) {
-      console.error("Invalid webhook data received.");
-      return res.status(400).json({ error: "Invalid webhook data." });
+    // Ensure required fields exist (we need both the custom transaction reference and the requestId)
+    if (!resource || !resource.mchTransactionRef || !resource.requestId) {
+      console.error("Invalid webhook payload: missing required fields.", req.body);
+      return res.status(400).json({ error: "Invalid webhook payload" });
     }
 
-    const transactionRef = resource.mchTransactionRef;
-    const status = resource.status;
+    const stableId = resource.mchTransactionRef; // our custom transaction identifier
+    const event = eventType.toUpperCase();
+    console.log(`Received webhook event: ${event} for transaction ${stableId}`);
 
-    switch (eventType) {
-      case "REQUEST.COMPLETED":
-        console.log(`Transaction ${transactionRef} completed successfully.`);
-        break;
+    if (event === "REQUEST.COMPLETED") {
+      // Instead of immediately updating order status, wait a short time and then refresh the transaction status.
+      setTimeout(async () => {
+        try {
+          // Refresh the transaction status via an API call.
+          // (Assuming that the client exposes a method refreshTransactionStatus which calls the
+          // /xp021/v1/request/refresh-transaction-status endpoint.)
+          const refreshed = await client.payment.request.refreshTransactionStatus({
+            requestId: resource.requestId,
+          });
+          const finalStatus = refreshed.data.status;
+          console.log(`Refreshed status for transaction ${stableId}: ${finalStatus}`);
+          if (finalStatus === "SUCCESSFUL" || finalStatus === "COMPLETED") {
+            console.log(`Final status confirmed for transaction ${stableId}. Transaction ID: ${refreshed.data.transactionId}`);
+            // Here you would update your database or trigger further order processing.
+          } else {
+            console.log(`Transaction ${stableId} still not final. Current status: ${finalStatus}`);
+            // Optionally, you could schedule another check or handle as needed.
+          }
+        } catch (err) {
+          console.error(`Error refreshing transaction ${stableId}:`, err);
+        }
+      }, 10000); // 10-second delay
 
-      case "REQUEST.INITIATED":
-        console.log(`Transaction ${transactionRef} has been initiated.`);
-        break;
-
-      case "REQUEST.FAILED":
-        console.error(`Transaction ${transactionRef} failed.`);
-        break;
-
-      default:
-        console.warn(`Unknown webhook event: ${eventType}`);
+      return res.sendStatus(200);
+    } else if (event === "REQUEST.INITIATED") {
+      console.log(`Transaction ${stableId} initiated.`);
+      return res.sendStatus(200);
+    } else {
+      console.log(`Received unhandled event type: ${event} for transaction ${stableId}`);
+      return res.sendStatus(200);
     }
-
-    return res.status(200).json({ message: "Webhook received successfully." });
   } catch (error) {
     console.error("Error handling webhook:", error);
-    return res.status(500).json({ error: "Webhook processing failed." });
+    return res.sendStatus(500);
   }
 };
