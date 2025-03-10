@@ -164,13 +164,14 @@ exports.tranzakWebhook = async (req, res) => {
     // Log full webhook payload for debugging
     console.log("Received Tranzak webhook payload:", JSON.stringify(req.body, null, 2));
 
-    const { data } = req.body;
-    if (!data || !data.requestId) {
+    // Now using 'resource' instead of 'data'
+    const { resource } = req.body;
+    if (!resource || !resource.requestId) {
       console.error("Invalid webhook payload:", req.body);
       return res.status(400).json({ error: "Invalid webhook payload" });
     }
 
-    const transactionId = data.requestId;
+    const transactionId = resource.requestId;
 
     // Update the webhook count for this transaction.
     if (!webhookCount[transactionId]) {
@@ -180,12 +181,12 @@ exports.tranzakWebhook = async (req, res) => {
     }
 
     // Log "Hello Big World" only if this is the second webhook and its status is COMPLETED.
-    if (webhookCount[transactionId] === 2 && data.status === "COMPLETED") {
+    if (webhookCount[transactionId] === 2 && resource.status === "COMPLETED") {
       console.log("Hello Big World");
     }
 
     // Process transaction status based on the webhook payload.
-    switch (data.status) {
+    switch (resource.status) {
       case "SUCCESSFUL":
       case "COMPLETED":
         console.log("Transaction completed successfully. Transaction ID:", transactionId);
@@ -198,7 +199,7 @@ exports.tranzakWebhook = async (req, res) => {
         break;
 
       default:
-        console.log("Received unsupported transaction status:", data.status);
+        console.log("Received unsupported transaction status:", resource.status);
         break;
     }
 
