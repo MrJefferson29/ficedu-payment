@@ -17,6 +17,17 @@ const User = require('../Models/user');
 // In production, consider a persistent store if needed.
 const webhookCount = {};
 
+function extractRidFromUrl(url) {
+  // Parse the payment URL query parameter 'rid'
+  try {
+    const parsedUrl = new URL(url);
+    return parsedUrl.searchParams.get("rid");
+  } catch (error) {
+    console.error("Error parsing payment URL:", error);
+    return null;
+  }
+}
+
 exports.processPayment = async (req, res) => {
   try {
     // Now including email in the request body
@@ -47,14 +58,14 @@ exports.processPayment = async (req, res) => {
 
     // Extract useful fields from the response
     const status = transaction.data ? transaction.data.status : null;
-    const transactionId = transaction.data
+    const initialTransactionId = transaction.data
       ? transaction.data.transactionId || transaction.data.requestId
       : null;
 
     // Create a Payment record in the database to track this payment
     try {
       await Payment.create({
-        transactionId: transactionId,
+        transactionId: initialTransactionId,
         email,
         amount,
         status: "initiated"
@@ -66,7 +77,7 @@ exports.processPayment = async (req, res) => {
 
     // Successful Payment Flow
     if (status === "SUCCESSFUL" || status === "COMPLETED") {
-      console.log("Transaction fully successful. Transaction ID:", transactionId);
+      console.log("Transaction fully successful. Transaction ID:", initialTransactionId);
 
       // Optional fund transfers if merchant info is provided
       if (transaction.data.merchant) {
@@ -116,10 +127,10 @@ exports.processPayment = async (req, res) => {
 
       return res.status(200).json({
         message: "Payment processed successfully.",
-        transactionId: transactionId,
+        transactionId: initialTransactionId,
       });
     } else if (status === "PAYMENT_IN_PROGRESS") {
-      console.log("Payment is still in progress. Transaction ID:", transactionId);
+      console.log("Payment is still in progress. Transaction ID:", initialTransactionId);
       // Initiate a web redirection flow to obtain the payment URL
       const webTransaction = await client.payment.collection.simple.chargeByWebRedirect({
         mchTransactionRef: shortUUID.generate(),
@@ -137,14 +148,26 @@ exports.processPayment = async (req, res) => {
         console.error("Web Transaction response missing payment URL:", webTransaction);
         return res.status(202).json({
           message: "Payment is in progress. Please wait for completion.",
-          transactionId: transactionId,
+          transactionId: initialTransactionId,
         });
+      }
+
+      const paymentUrl = webTransaction.data.links.paymentAuthUrl;
+      // Extract the redirect transaction id from the URL (assuming it is in the "rid" query param)
+      const redirectTransactionId = extractRidFromUrl(paymentUrl);
+
+      // Update the Payment record with the redirect transaction id
+      if (redirectTransactionId) {
+        await Payment.findOneAndUpdate(
+          { transactionId: initialTransactionId },
+          { redirectTransactionId }
+        );
       }
 
       return res.status(202).json({
         message: "Redirect user to complete payment.",
-        transactionId: transactionId,
-        paymentUrl: webTransaction.data.links.paymentAuthUrl,
+        transactionId: initialTransactionId,
+        paymentUrl,
       });
     } else {
       // Fallback: attempt web redirection for other statuses
@@ -182,39 +205,52 @@ exports.tranzakWebhook = async (req, res) => {
     // Log full webhook payload for debugging
     console.log("Received Tranzak webhook payload:", JSON.stringify(req.body, null, 2));
 
-    // Now using 'resource' instead of 'data'
+    // Using 'resource' instead of 'data'
     const { resource } = req.body;
     if (!resource || !resource.requestId) {
       console.error("Invalid webhook payload:", req.body);
       return res.status(400).json({ error: "Invalid webhook payload" });
     }
 
-    const transactionId = resource.requestId;
+    const incomingRequestId = resource.requestId;
 
     // Update the webhook count for this transaction.
-    if (!webhookCount[transactionId]) {
-      webhookCount[transactionId] = 1;
+    if (!webhookCount[incomingRequestId]) {
+      webhookCount[incomingRequestId] = 1;
     } else {
-      webhookCount[transactionId]++;
+      webhookCount[incomingRequestId]++;
+    }
+
+    // Find the Payment record matching either the initial or redirect transaction id.
+    let paymentRecord = await Payment.findOne({
+      $or: [
+        { transactionId: incomingRequestId },
+        { redirectTransactionId: incomingRequestId }
+      ]
+    });
+
+    if (!paymentRecord) {
+      console.error(`No Payment record found for transaction ${incomingRequestId}`);
+      return res.sendStatus(404);
     }
 
     // When the second webhook arrives and status is COMPLETED or SUCCESSFUL,
     // update the Payment record and the corresponding User's "paid" status.
     if (
-      webhookCount[transactionId] === 2 &&
+      webhookCount[incomingRequestId] === 2 &&
       (resource.status === "COMPLETED" || resource.status === "SUCCESSFUL")
     ) {
-      console.log("Payment confirmed for transaction:", transactionId);
+      console.log("Payment confirmed for transaction:", incomingRequestId);
 
       // Update Payment record status
-      const paymentRecord = await Payment.findOneAndUpdate(
-        { transactionId },
+      paymentRecord = await Payment.findOneAndUpdate(
+        { _id: paymentRecord._id },
         { status: "completed" },
         { new: true }
       );
 
       if (paymentRecord) {
-        // Update User's paid status
+        // Update User's paid status using the email stored in the Payment record
         const userUpdate = await User.findOneAndUpdate(
           { email: paymentRecord.email },
           { paid: true },
@@ -226,25 +262,21 @@ exports.tranzakWebhook = async (req, res) => {
           console.error(`User with email ${paymentRecord.email} not found.`);
         }
       } else {
-        console.error(`No Payment record found for transaction ${transactionId}`);
+        console.error(`Failed to update Payment record for transaction ${incomingRequestId}`);
       }
 
       console.log("Hello Big World");
     }
 
-    // Process transaction status based on the webhook payload.
+    // Log additional status info
     switch (resource.status) {
       case "SUCCESSFUL":
       case "COMPLETED":
-        console.log("Transaction completed successfully. Transaction ID:", transactionId);
-        // Additional server record updates can be done here.
+        console.log("Transaction completed successfully. Transaction ID:", incomingRequestId);
         break;
-
       case "PAYMENT_IN_PROGRESS":
-        console.log("Payment is still in progress for transaction:", transactionId);
-        // Optionally notify or log that the payment is in progress.
+        console.log("Payment is still in progress for transaction:", incomingRequestId);
         break;
-
       default:
         console.log("Received unsupported transaction status:", resource.status);
         break;
