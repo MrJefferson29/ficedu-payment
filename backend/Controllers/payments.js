@@ -9,6 +9,26 @@ const client = new tranzak({
   mode: process.env.TRANZAK_MODE || "sandbox",
 });
 
+/**
+ * Custom helper to refresh transaction status.
+ * Calls the /xp021/v1/request/refresh-transaction-status endpoint.
+ */
+const refreshTransactionStatus = async (requestId) => {
+  try {
+    // If the client library does not expose a dedicated method,
+    // we assume that it provides a generic "request" method.
+    // If not, you can use a library like axios here.
+    const response = await client.request({
+      method: "POST",
+      url: "/xp021/v1/request/refresh-transaction-status",
+      data: { requestId },
+    });
+    return response;
+  } catch (error) {
+    throw error;
+  }
+};
+
 // Process Payment Function (for context)
 exports.processPayment = async (req, res) => {
   try {
@@ -24,11 +44,11 @@ exports.processPayment = async (req, res) => {
       currencyCode: "XAF",
       description,
       payerNote: description,
-      mchTransactionRef: shortUUID.generate(), // Custom stable reference
+      mchTransactionRef: shortUUID.generate(), // Stable identifier for this transaction
       mobileWalletNumber,
     });
 
-    // If the transaction object supports refresh, update its status.
+    // Refresh the transaction status if supported
     if (transaction.refresh) {
       await transaction.refresh();
     }
@@ -47,13 +67,14 @@ exports.processPayment = async (req, res) => {
       });
     } else if (status === "PAYMENT_IN_PROGRESS") {
       console.log("Payment is still in progress. Transaction ID:", transactionId);
-      // Initiate a web redirection flow for additional payer authentication
+      // Initiate a web redirection flow to obtain the payment URL
       const webTransaction = await client.payment.collection.simple.chargeByWebRedirect({
         mchTransactionRef: shortUUID.generate(),
         amount,
         currencyCode: "XAF",
         description,
       });
+
       if (
         !webTransaction ||
         !webTransaction.data ||
@@ -66,12 +87,14 @@ exports.processPayment = async (req, res) => {
           transactionId,
         });
       }
+
       return res.status(202).json({
         message: "Redirect user to complete payment.",
         transactionId,
         paymentUrl: webTransaction.data.links.paymentAuthUrl,
       });
     } else {
+      // Fallback: attempt web redirection for other statuses
       console.log("Fallback redirection for transaction. Status:", status);
       const webTransaction = await client.payment.collection.simple.chargeByWebRedirect({
         mchTransactionRef: shortUUID.generate(),
@@ -79,6 +102,7 @@ exports.processPayment = async (req, res) => {
         currencyCode: "XAF",
         description,
       });
+
       if (
         !webTransaction ||
         !webTransaction.data ||
@@ -88,6 +112,7 @@ exports.processPayment = async (req, res) => {
         console.error("Fallback web Transaction response missing payment URL:", webTransaction);
         return res.status(500).json({ error: "Payment redirection failed." });
       }
+
       return res.status(202).json({
         message: "Redirect user to complete payment.",
         paymentUrl: webTransaction.data.links.paymentAuthUrl,
@@ -103,40 +128,34 @@ exports.processPayment = async (req, res) => {
 exports.tranzakWebhook = async (req, res) => {
   try {
     const { eventType, resource } = req.body;
-    // Ensure required fields exist (we need both the custom transaction reference and the requestId)
     if (!resource || !resource.mchTransactionRef || !resource.requestId) {
       console.error("Invalid webhook payload: missing required fields.", req.body);
       return res.status(400).json({ error: "Invalid webhook payload" });
     }
-
-    const stableId = resource.mchTransactionRef; // our custom transaction identifier
+    
+    const stableId = resource.mchTransactionRef;
     const event = eventType.toUpperCase();
     console.log(`Received webhook event: ${event} for transaction ${stableId}`);
-
+    
     if (event === "REQUEST.COMPLETED") {
-      // Instead of immediately updating order status, wait a short time and then refresh the transaction status.
+      // Delay before refreshing to allow final processing
       setTimeout(async () => {
         try {
-          // Refresh the transaction status via an API call.
-          // (Assuming that the client exposes a method refreshTransactionStatus which calls the
-          // /xp021/v1/request/refresh-transaction-status endpoint.)
-          const refreshed = await client.payment.request.refreshTransactionStatus({
-            requestId: resource.requestId,
-          });
-          const finalStatus = refreshed.data.status;
+          const refreshed = await refreshTransactionStatus(resource.requestId);
+          const finalStatus = refreshed.data ? refreshed.data.status : null;
           console.log(`Refreshed status for transaction ${stableId}: ${finalStatus}`);
           if (finalStatus === "SUCCESSFUL" || finalStatus === "COMPLETED") {
             console.log(`Final status confirmed for transaction ${stableId}. Transaction ID: ${refreshed.data.transactionId}`);
-            // Here you would update your database or trigger further order processing.
+            // Update your order processing (e.g., update DB, notify customer) here.
           } else {
             console.log(`Transaction ${stableId} still not final. Current status: ${finalStatus}`);
-            // Optionally, you could schedule another check or handle as needed.
+            // Optionally schedule another check or handle as needed.
           }
         } catch (err) {
           console.error(`Error refreshing transaction ${stableId}:`, err);
         }
       }, 10000); // 10-second delay
-
+      
       return res.sendStatus(200);
     } else if (event === "REQUEST.INITIATED") {
       console.log(`Transaction ${stableId} initiated.`);
