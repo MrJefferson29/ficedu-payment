@@ -10,7 +10,6 @@ const videoCourseRoute = require('./video')
 const questionsRoute = require('./questions')
 const featureRoute = require('./features')
 const payment = require('./payment')
-const { processPayment, tranzakWebhook } = require('../Controllers/payments');
 
 
 router.use('/auth', authRoute)
