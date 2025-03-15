@@ -1,61 +1,77 @@
 import React, { createContext, useState, useEffect } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { useRouter } from 'expo-router'; // Use the useRouter hook from expo-router
+import { useRouter } from 'expo-router';
 
 export const AuthContext = createContext();
 
 export const AuthProvider = ({ children }) => {
     const [userToken, setUserToken] = useState(null);
+    const [userEmail, setUserEmail] = useState(null);
     const [isLoading, setIsLoading] = useState(true);
-    const router = useRouter(); // Get the router object
+    const router = useRouter();
 
-    // Helper functions for token management
-    const getToken = async () => {
+    const getUserData = async () => {
         try {
-            const token = await AsyncStorage.getItem('userToken');
-            return token;
+            const data = await AsyncStorage.getItem('userData');
+            if (data) {
+                return JSON.parse(data);
+            }
+            return null;
         } catch (error) {
-            console.error('Error fetching token:', error);
+            console.error('Error fetching user data:', error);
             return null;
         }
     };
 
-    const saveToken = async (token) => {
+    const saveUserData = async (token, email) => {
         try {
-            await AsyncStorage.setItem('userToken', token);
+            const userData = { token, email };
+            await AsyncStorage.setItem('userData', JSON.stringify(userData));
             setUserToken(token);
+            setUserEmail(email);
         } catch (error) {
-            console.error('Error saving token:', error);
+            console.error('Error saving user data:', error);
         }
     };
 
-    const removeToken = async () => {
+    const removeUserData = async () => {
         try {
-            await AsyncStorage.removeItem('userToken');
+            await AsyncStorage.removeItem('userData');
             setUserToken(null);
+            setUserEmail(null);
         } catch (error) {
-            console.error('Error removing token:', error);
+            console.error('Error removing user data:', error);
         }
     };
 
     useEffect(() => {
-        const fetchToken = async () => {
-            const token = await getToken();
-            setUserToken(token);
+        const fetchUserData = async () => {
+            const userData = await getUserData();
+            if (userData) {
+                setUserToken(userData.token);
+                setUserEmail(userData.email);
+            }
             setIsLoading(false);
         };
-        fetchToken();
+
+        fetchUserData();
     }, []);
 
     useEffect(() => {
-        if (userToken) {
-            // Redirect to the desired page once the token is set
-            router.push('/'); // Use router.push from expo-router
+        if (!isLoading) {
+            // Defer navigation until after the initial render
+            setTimeout(() => {
+                if (userToken) {
+                    router.push('/');
+                } else {
+                    router.push('/login');
+                }
+            }, 0);
         }
-    }, [userToken]); // Runs when userToken changes
+    }, [userToken, isLoading]);
 
     return (
-        <AuthContext.Provider value={{ userToken, setUserToken: saveToken, removeToken, isLoading }}>
+        <AuthContext.Provider value={{ userToken, userEmail, saveUserData, removeUserData, isLoading }}>
             {children}
         </AuthContext.Provider>
     );

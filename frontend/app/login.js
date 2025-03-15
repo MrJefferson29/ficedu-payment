@@ -3,36 +3,38 @@ import { Alert, TextInput, TouchableOpacity, View, Text, StyleSheet, Image } fro
 import axios from 'axios';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { AuthContext } from './Contexts/AuthContext';
-import { router, useRouter } from 'expo-router';
+import { useRouter } from 'expo-router';
 
 export default function Login() {
-    const { setUserToken } = useContext(AuthContext);
+    const { saveUserData } = useContext(AuthContext);
     const [email, setEmail] = useState('');
     const [password, setPassword] = useState('');
-    const route = useRouter()
+    const router = useRouter();
 
     const handleLogin = async () => {
         try {
             console.log('Attempting login with:', email, password);
-            const response = await axios.post('http://192.168.245.1:5000/auth/login', {
+            const response = await axios.post('http://192.168.196.1:5000/auth/login', {
                 email,
                 password,
             });
-    
+
             console.log('Login response:', response);
-    
-            // Save the token to AsyncStorage
+
+            // Save token, user data, and email to AsyncStorage using the correct property names.
             await AsyncStorage.setItem('userToken', response.data.token);
-            console.log('Token saved to AsyncStorage');
-    
-            // Update the AuthContext
-            setUserToken(response.data.token);
+            await AsyncStorage.setItem('user', JSON.stringify(response.data.data));
+            await AsyncStorage.setItem('userEmail', response.data.data.email);
+            console.log('Token, user data, and email saved to AsyncStorage');
+
+            // Update AuthContext with the user data
+            saveUserData(response.data.token, response.data.data.email);
         } catch (error) {
             console.log('Login error:', error.response?.data || error.message || 'Unknown error');
             Alert.alert('Error', error.response?.data?.message || 'Something went wrong.');
         }
     };
-    
+
     return (
         <View style={styles.wrapper}>
             <Text style={styles.title}>FiCEdu</Text>
@@ -60,19 +62,19 @@ export default function Login() {
             <View style={styles.iconContainer}>
                 <TouchableOpacity style={styles.iconWrapper}>
                     <Image
-                        source={require('../assets/images/google.png')} // Replace with your image path
+                        source={require('../assets/images/google.png')}
                         style={styles.image}
                     />
                 </TouchableOpacity>
                 <TouchableOpacity style={styles.iconWrapper}>
                     <Image
-                        source={require('../assets/images/facebook.png')} // Replace with your image path
+                        source={require('../assets/images/facebook.png')}
                         style={styles.image}
                     />
                 </TouchableOpacity>
                 <TouchableOpacity style={styles.iconWrapper}>
                     <Image
-                        source={require('../assets/images/twitter.png')} // Replace with your image path
+                        source={require('../assets/images/twitter.png')}
                         style={styles.image}
                     />
                 </TouchableOpacity>
@@ -148,11 +150,11 @@ const styles = StyleSheet.create({
         shadowOffset: { width: 0, height: 2 },
         shadowOpacity: 0.2,
         shadowRadius: 5,
-        elevation: 5, // For Android shadow
+        elevation: 5,
     },
     image: {
         width: 30,
-        height: 30, // Adjusted size
+        height: 30,
         resizeMode: 'contain',
     },
     footer: {
