@@ -64,7 +64,7 @@ const Payment = () => {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           amount: parseInt(amount), // Ensure the amount is a number
-          mobileWalletNumber: 237654711169,
+          mobileWalletNumber,
           description,
           email: profileEmail || 'default@example.com', // Use fetched email
         }),
@@ -93,6 +93,26 @@ const Payment = () => {
       <Text style={styles.title}>Make a Payment</Text>
       <View style={styles.form}>
         <View style={styles.inputContainer}>
+          <Text style={styles.label}>Amount</Text>
+          <TextInput
+            style={styles.input}
+            placeholder="Enter amount"
+            keyboardType="numeric"
+            value={amount}
+            onChangeText={setAmount}
+          />
+        </View>
+        <View style={styles.inputContainer}>
+          <Text style={styles.label}>Mobile Wallet Number</Text>
+          <TextInput
+            style={styles.input}
+            placeholder="Enter mobile wallet number"
+            keyboardType="phone-pad"
+            value={mobileWalletNumber}
+            onChangeText={setMobileWalletNumber}
+          />
+        </View>
+        <View style={styles.inputContainer}>
           <Text style={styles.label}>Description</Text>
           <View style={styles.pickerContainer}>
             <Picker
@@ -101,9 +121,9 @@ const Payment = () => {
               style={styles.picker}
               itemStyle={styles.pickerItem}
             >
-              <Picker.Item label="RELEVANT SKILL" value="RELEVANT SKILL" />
-              <Picker.Item label="TRAVEL ABROAD" value="TRAVEL ABROAD" />
-              <Picker.Item label="SELF DISCOVERY" value="SELF DISCOVERY" />
+              <Picker.Item label="Relevant Skills" value="Relevant Skills" />
+              <Picker.Item label="Travel Abroad Course" value="Travel Abroad Course" />
+              <Picker.Item label="Self Discovery" value="Self Discovery" />
             </Picker>
           </View>
         </View>

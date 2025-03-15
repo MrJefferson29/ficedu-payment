@@ -10,8 +10,8 @@ const client = new tranzak({
 });
 
 // Import the Payment and User models
-const Payment = require("../Models/payments");
-const User = require("../Models/user");
+const Payment = require('../Models/payments');
+const User = require('../Models/user');
 
 // Global in-memory counter for tracking webhooks per transaction.
 // In production, consider a persistent store if needed.
@@ -31,22 +31,22 @@ function extractRidFromUrl(url) {
 exports.processPayment = async (req, res) => {
   try {
     // Now including email in the request body
-    const { description, email, amount = 30000 } = req.body;
-    if (!description || !email) {
+    const { amount, mobileWalletNumber, description, email } = req.body;
+    if (!amount || !mobileWalletNumber || !description || !email) {
       console.error("Missing required fields:", req.body);
       return res.status(400).json({ error: "Missing required fields." });
     }
 
     // Initiate the mobile money payment via Tranzak
-    const transaction =
-      await client.payment.collection.simple.chargeMobileMoney({
-        amount: 30000,
-        currencyCode: "XAF",
-        description,
-        payerNote: description,
-        mchTransactionRef: shortUUID.generate(),
-        mobileWalletNumber: 237654711169,
-      });
+    console.log("Initiating payment with mobileWalletNumber:", mobileWalletNumber);
+    const transaction = await client.payment.collection.simple.chargeMobileMoney({
+      amount,
+      currencyCode: "XAF",
+      description,
+      payerNote: description,
+      mchTransactionRef: shortUUID.generate(),
+      mobileWalletNumber,
+    });
 
     // Refresh transaction status if available
     if (transaction.refresh) {
@@ -78,10 +78,7 @@ exports.processPayment = async (req, res) => {
 
     // Successful Payment Flow
     if (status === "SUCCESSFUL" || status === "COMPLETED") {
-      console.log(
-        "Transaction fully successful. Transaction ID:",
-        initialTransactionId
-      );
+      console.log("Transaction fully successful. Transaction ID:", initialTransactionId);
 
       // Optional fund transfers if merchant info is provided
       if (transaction.data.merchant) {
@@ -90,9 +87,7 @@ exports.processPayment = async (req, res) => {
           accounts = await client.account.list();
         } catch (err) {
           console.error("Failed to fetch accounts:", err);
-          return res
-            .status(500)
-            .json({ error: "Failed to fetch collection accounts." });
+          return res.status(500).json({ error: "Failed to fetch collection accounts." });
         }
 
         const collectionAccount = accounts.find(
@@ -100,9 +95,7 @@ exports.processPayment = async (req, res) => {
         );
 
         if (!collectionAccount) {
-          console.warn(
-            "Collection account not found, proceeding without fund transfers."
-          );
+          console.warn("Collection account not found, proceeding without fund transfers.");
         } else {
           // Calculate the transfer amount (deducting a 7% fee)
           const transferAmount = amount * 0.93;
@@ -138,18 +131,14 @@ exports.processPayment = async (req, res) => {
         transactionId: initialTransactionId,
       });
     } else if (status === "PAYMENT_IN_PROGRESS") {
-      console.log(
-        "Payment is still in progress. Transaction ID:",
-        initialTransactionId
-      );
+      console.log("Payment is still in progress. Transaction ID:", initialTransactionId);
       // Initiate a web redirection flow to obtain the payment URL
-      const webTransaction =
-        await client.payment.collection.simple.chargeByWebRedirect({
-          mchTransactionRef: shortUUID.generate(),
-          amount,
-          currencyCode: "XAF",
-          description,
-        });
+      const webTransaction = await client.payment.collection.simple.chargeByWebRedirect({
+        mchTransactionRef: shortUUID.generate(),
+        amount,
+        currencyCode: "XAF",
+        description,
+      });
 
       if (
         !webTransaction ||
@@ -157,10 +146,7 @@ exports.processPayment = async (req, res) => {
         !webTransaction.data.links ||
         !webTransaction.data.links.paymentAuthUrl
       ) {
-        console.error(
-          "Web Transaction response missing payment URL:",
-          webTransaction
-        );
+        console.error("Web Transaction response missing payment URL:", webTransaction);
         return res.status(202).json({
           message: "Payment is in progress. Please wait for completion.",
           transactionId: initialTransactionId,
@@ -187,13 +173,12 @@ exports.processPayment = async (req, res) => {
     } else {
       // Fallback: attempt web redirection for other statuses
       console.log("Fallback redirection for transaction. Status:", status);
-      const webTransaction =
-        await client.payment.collection.simple.chargeByWebRedirect({
-          mchTransactionRef: shortUUID.generate(),
-          amount,
-          currencyCode: "XAF",
-          description,
-        });
+      const webTransaction = await client.payment.collection.simple.chargeByWebRedirect({
+        mchTransactionRef: shortUUID.generate(),
+        amount,
+        currencyCode: "XAF",
+        description,
+      });
 
       if (
         !webTransaction ||
@@ -201,10 +186,7 @@ exports.processPayment = async (req, res) => {
         !webTransaction.data.links ||
         !webTransaction.data.links.paymentAuthUrl
       ) {
-        console.error(
-          "Fallback web Transaction response missing payment URL:",
-          webTransaction
-        );
+        console.error("Fallback web Transaction response missing payment URL:", webTransaction);
         return res.status(500).json({ error: "Payment redirection failed." });
       }
 
@@ -222,10 +204,7 @@ exports.processPayment = async (req, res) => {
 exports.tranzakWebhook = async (req, res) => {
   try {
     // Log full webhook payload for debugging
-    console.log(
-      "Received Tranzak webhook payload:",
-      JSON.stringify(req.body, null, 2)
-    );
+    console.log("Received Tranzak webhook payload:", JSON.stringify(req.body, null, 2));
 
     // Using 'resource' instead of 'data'
     const { resource } = req.body;
@@ -240,14 +219,12 @@ exports.tranzakWebhook = async (req, res) => {
     let paymentRecord = await Payment.findOne({
       $or: [
         { transactionId: incomingRequestId },
-        { redirectTransactionId: incomingRequestId },
-      ],
+        { redirectTransactionId: incomingRequestId }
+      ]
     });
 
     if (!paymentRecord) {
-      console.error(
-        `No Payment record found for transaction ${incomingRequestId}`
-      );
+      console.error(`No Payment record found for transaction ${incomingRequestId}`);
       return res.sendStatus(404);
     }
 
@@ -259,9 +236,7 @@ exports.tranzakWebhook = async (req, res) => {
       webhookCount[paymentKey]++;
     }
 
-    console.log(
-      `Webhook count for payment ${paymentKey}: ${webhookCount[paymentKey]}`
-    );
+    console.log(`Webhook count for payment ${paymentKey}: ${webhookCount[paymentKey]}`);
 
     // When the second webhook arrives and status is COMPLETED or SUCCESSFUL,
     // update the Payment record and the corresponding User's "paid" status.
@@ -291,9 +266,7 @@ exports.tranzakWebhook = async (req, res) => {
           console.error(`User with email ${paymentRecord.email} not found.`);
         }
       } else {
-        console.error(
-          `Failed to update Payment record for transaction ${paymentKey}`
-        );
+        console.error(`Failed to update Payment record for transaction ${paymentKey}`);
       }
 
       console.log("Hello Big World");
@@ -303,22 +276,13 @@ exports.tranzakWebhook = async (req, res) => {
     switch (resource.status) {
       case "SUCCESSFUL":
       case "COMPLETED":
-        console.log(
-          "Transaction completed successfully. Transaction ID:",
-          incomingRequestId
-        );
+        console.log("Transaction completed successfully. Transaction ID:", incomingRequestId);
         break;
       case "PAYMENT_IN_PROGRESS":
-        console.log(
-          "Payment is still in progress for transaction:",
-          incomingRequestId
-        );
+        console.log("Payment is still in progress for transaction:", incomingRequestId);
         break;
       default:
-        console.log(
-          "Received unsupported transaction status:",
-          resource.status
-        );
+        console.log("Received unsupported transaction status:", resource.status);
         break;
     }
 
