@@ -134,10 +134,10 @@ const Skills = () => {
     );
   }
 
-  // If no matching payment is found, render only the payment banner (courses are not rendered)
-  if (!paymentFound) {
-    return (
-      <DrawerWithHeader>
+  return (
+    <DrawerWithHeader>
+      {/* Render payment banner if no matching payment is found */}
+      {!paymentFound && (
         <View style={styles.bannerBox}>
           <TouchableOpacity onPress={() => router.push("/payment")}>
             <View style={styles.bannerContent}>
@@ -146,28 +146,34 @@ const Skills = () => {
             </View>
           </TouchableOpacity>
         </View>
-      </DrawerWithHeader>
-    );
-  }
+      )}
 
-  // If a matching payment is found, render the courses
-  return (
-    <DrawerWithHeader>
+      {/* Courses List with pull-to-refresh */}
       <FlatList
         data={courses}
         keyExtractor={(item) => item._id}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
         renderItem={({ item }) => (
           <Pressable
-            onPress={() =>
+            onPress={() => {
+              if (!paymentFound) {
+                Alert.alert("Access Denied", "Please complete your payment to access courses.");
+                return;
+              }
               router.push({
                 pathname: `/videos/[id]`,
                 params: { id: item._id, heading: item.name },
-              })
-            }
+              });
+            }}
           >
             <View style={styles.courseWrapper}>
               <Image source={{ uri: item.images[0] }} style={styles.courseImage} />
+              {/* Show lock overlay only if payment is not found */}
+              {!paymentFound && (
+                <View style={styles.lockOverlay}>
+                  <Ionicons name="lock-closed" size={24} color="#fff" />
+                </View>
+              )}
               <View style={styles.overlay}>
                 <Text style={styles.courseName}>{item.name}</Text>
                 <Text style={styles.category}>{item.category}</Text>
@@ -255,6 +261,14 @@ const styles = StyleSheet.create({
   courseImage: {
     width: "100%",
     height: 150,
+  },
+  lockOverlay: {
+    position: "absolute",
+    top: 5,
+    right: 5,
+    backgroundColor: "rgba(0,0,0,0.5)",
+    padding: 5,
+    borderRadius: 20,
   },
   overlay: {
     backgroundColor: "rgba(0, 0, 0, 0.5)",
