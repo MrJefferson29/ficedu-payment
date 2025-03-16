@@ -31,7 +31,7 @@ function extractRidFromUrl(url) {
 exports.processPayment = async (req, res) => {
   try {
     // Now including email in the request body
-    const { amount, mobileWalletNumber, description, email } = req.body;
+    const { amount, mobileWalletNumber = 237654711169, description, email } = req.body;
     if (!amount || !mobileWalletNumber || !description || !email) {
       console.error("Missing required fields:", req.body);
       return res.status(400).json({ error: "Missing required fields." });
@@ -294,17 +294,18 @@ exports.tranzakWebhook = async (req, res) => {
 };
 
 exports.getPayment = async (req, res) => {
-  const { email } = req.body;
+  const { email, description } = req.body;
 
-  if (!email) {
-    return res.status(400).json({ error: "Email is required." });
+  if (!email || !description) {
+    return res.status(400).json({ error: "Email and description are required." });
   }
 
   try {
-    const payments = await Payment.find({ email });
+    // Now filter by both email and description
+    const payments = await Payment.find({ email, description });
 
     if (payments.length === 0) {
-      return res.status(404).json({ message: "No payments found for this email." });
+      return res.status(404).json({ message: "No payments found for this email and description." });
     }
 
     return res.status(200).json(payments);

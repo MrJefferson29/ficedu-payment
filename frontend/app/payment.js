@@ -121,9 +121,9 @@ const Payment = () => {
               style={styles.picker}
               itemStyle={styles.pickerItem}
             >
-              <Picker.Item label="Relevant Skills" value="Relevant Skills" />
-              <Picker.Item label="Travel Abroad Course" value="Travel Abroad Course" />
-              <Picker.Item label="Self Discovery" value="Self Discovery" />
+              <Picker.Item label="RELEVANT SKILL" value="RELEVANT SKILL" />
+              <Picker.Item label="TRAVEL ABROAD" value="TRAVEL ABROAD" />
+              <Picker.Item label="SELF DISCOVERY" value="SELF DISCOVERY" />
             </Picker>
           </View>
         </View>

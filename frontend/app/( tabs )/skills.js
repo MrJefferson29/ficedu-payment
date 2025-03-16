@@ -14,46 +14,49 @@ import {
 } from "react-native";
 import axios from "axios";
 import { useRouter } from "expo-router";
-import AsyncStorage from "@react-native-async-storage/async-storage";
 import { DrawerLayoutAndroid } from "react-native-gesture-handler";
 import { Ionicons } from "@expo/vector-icons";
 import { AuthContext } from "../Contexts/AuthContext"; // Adjust path if needed
 
 const Skills = () => {
-  const { userToken } = useContext(AuthContext); // Using token from AuthContext
+  // Retrieve both userToken and userEmail from AuthContext
+  const { userToken, userEmail } = useContext(AuthContext);
   const [courses, setCourses] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
-  const [isPaid, setIsPaid] = useState(false); // State to store paid status
+  // State to track if a matching payment record exists
+  const [paymentFound, setPaymentFound] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const router = useRouter();
 
   useEffect(() => {
-    if (userToken) {
-      fetchUserProfile();
+    // Check payment status only if userEmail exists
+    if (userEmail) {
+      checkPaymentStatus();
     }
     fetchCourses();
-  }, [userToken]);
+  }, [userEmail]);
 
-  // Fetch user profile to determine paid status
-  const fetchUserProfile = async () => {
-    if (!userToken) return;
+  // Check if a payment exists with the provided email and the exact description "RELEVANT SKILL"
+  const checkPaymentStatus = async () => {
     try {
-      const response = await fetch("https://ficedu.onrender.com/user/profile", {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${userToken}`,
-          "Content-Type": "application/json",
-        },
-      });
-      if (!response.ok) {
-        throw new Error("Failed to fetch profile data");
+      const response = await axios.post(
+        "https://ficedu-payment.onrender.com/process/get-payment",
+        {
+          email: userEmail,
+          description: "RELEVANT SKILL",
+        }
+      );
+      // Assuming the endpoint returns an array of matching payments if found
+      if (response.data && Array.isArray(response.data) && response.data.length > 0) {
+        setPaymentFound(true);
+      } else {
+        setPaymentFound(false);
       }
-      const data = await response.json();
-      // Assume profile data is inside data.data and contains a boolean "paid" property
-      setIsPaid(data.data.paid);
     } catch (error) {
-      Alert.alert("Error", error.message);
+      console.error("Error checking payment status:", error);
+      Alert.alert("Error", "Unable to verify payment status.");
+      setPaymentFound(false);
     }
   };
 
@@ -69,10 +72,10 @@ const Skills = () => {
     }
   };
 
-  // Pull-to-refresh handler
+  // Pull-to-refresh handler: refresh both payment status and courses list
   const onRefresh = async () => {
     setRefreshing(true);
-    await Promise.all([fetchUserProfile(), fetchCourses()]);
+    await Promise.all([checkPaymentStatus(), fetchCourses()]);
     setRefreshing(false);
   };
 
@@ -131,10 +134,10 @@ const Skills = () => {
     );
   }
 
-  return (
-    <DrawerWithHeader>
-      {/* Render banner only if user has not paid */}
-      {!isPaid && (
+  // If no matching payment is found, render only the payment banner (courses are not rendered)
+  if (!paymentFound) {
+    return (
+      <DrawerWithHeader>
         <View style={styles.bannerBox}>
           <TouchableOpacity onPress={() => router.push("/payment")}>
             <View style={styles.bannerContent}>
@@ -143,36 +146,28 @@ const Skills = () => {
             </View>
           </TouchableOpacity>
         </View>
-      )}
+      </DrawerWithHeader>
+    );
+  }
 
-      {/* Courses List with pull-to-refresh */}
+  // If a matching payment is found, render the courses
+  return (
+    <DrawerWithHeader>
       <FlatList
         data={courses}
         keyExtractor={(item) => item._id}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
         renderItem={({ item }) => (
           <Pressable
-            onPress={() => {
-              if (!isPaid) {
-                Alert.alert(
-                  "Access Denied",
-                  "Please complete your payment to access courses."
-                );
-                return;
-              }
+            onPress={() =>
               router.push({
                 pathname: `/videos/[id]`,
                 params: { id: item._id, heading: item.name },
-              });
-            }}
+              })
+            }
           >
             <View style={styles.courseWrapper}>
               <Image source={{ uri: item.images[0] }} style={styles.courseImage} />
-              {!isPaid && (
-                <View style={styles.lockOverlay}>
-                  <Ionicons name="lock-closed" size={24} color="#fff" />
-                </View>
-              )}
               <View style={styles.overlay}>
                 <Text style={styles.courseName}>{item.name}</Text>
                 <Text style={styles.category}>{item.category}</Text>
@@ -260,14 +255,6 @@ const styles = StyleSheet.create({
   courseImage: {
     width: "100%",
     height: 150,
-  },
-  lockOverlay: {
-    position: "absolute",
-    top: 5,
-    right: 5,
-    backgroundColor: "rgba(0,0,0,0.5)",
-    padding: 5,
-    borderRadius: 20,
   },
   overlay: {
     backgroundColor: "rgba(0, 0, 0, 0.5)",
