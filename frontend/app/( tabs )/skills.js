@@ -56,7 +56,10 @@ const Skills = () => {
       }
     } catch (error) {
       console.error("Error checking payment status:", error);
-      Alert.alert("Notice", "You haven't paid for this course yet, navigate to payment, and be sure to set Course to 'RELEVANT SKILLS'");
+      Alert.alert(
+        "Notice",
+        "You haven't paid for this course yet, navigate to payment, and be sure to set Course to 'RELEVANT SKILLS'"
+      );
       setPaymentFound(false);
     }
   };
@@ -120,9 +123,7 @@ const Skills = () => {
   };
 
   if (loading) {
-    return (
-      <Loading />
-    );
+    return <Loading />;
   }
 
   if (error) {
@@ -135,55 +136,63 @@ const Skills = () => {
 
   return (
     <DrawerWithHeader>
-      {/* Render payment banner if no matching payment is found */}
-      {!paymentFound && (
-        <View style={styles.bannerBox}>
-          <TouchableOpacity onPress={() => router.push({
-            pathname: "/payment",
-            params: {description: 'RELEVANT SKILLS'}
-          })}>
-            <View style={styles.bannerContent}>
-              <Text style={styles.bannerTitle}>Access All Courses</Text>
-              <Text style={styles.bannerPrice}>60,000 XAF</Text>
-            </View>
-          </TouchableOpacity>
-        </View>
-      )}
-
-      {/* Courses List with pull-to-refresh */}
-      <FlatList
-        data={courses}
-        keyExtractor={(item) => item._id}
-        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
-        renderItem={({ item }) => (
-          <Pressable
-            onPress={() => {
-              if (!paymentFound) {
-                Alert.alert("Access Denied", "Please complete your payment to access courses.");
-                return;
+      <View style={styles.contentContainer}>
+        {/* Render payment banner if no matching payment is found */}
+        {!paymentFound && (
+          <View style={styles.bannerBox}>
+            <TouchableOpacity
+              onPress={() =>
+                router.push({
+                  pathname: "/payment",
+                  params: { description: "RELEVANT SKILLS" },
+                })
               }
-              router.push({
-                pathname: `/chapters/[id]`,
-                params: { id: item._id, heading: item.name },
-              });
-            }}
-          >
-            <View style={styles.courseWrapper}>
-              <Image source={{ uri: item.images[0] }} style={styles.courseImage} />
-              {/* Show lock overlay only if payment is not found */}
-              {!paymentFound && (
-                <View style={styles.lockOverlay}>
-                  <Ionicons name="lock-closed" size={24} color="#fff" />
-                </View>
-              )}
-              <View style={styles.overlay}>
-                <Text style={styles.courseName}>{item.name}</Text>
-                <Text style={styles.category}>{item.category}</Text>
+            >
+              <View style={styles.bannerContent}>
+                <Text style={styles.bannerTitle}>Access All Courses</Text>
+                <Text style={styles.bannerPrice}>60,000 XAF</Text>
               </View>
-            </View>
-          </Pressable>
+            </TouchableOpacity>
+          </View>
         )}
-      />
+
+        {/* Courses List with pull-to-refresh */}
+        <FlatList
+          data={courses}
+          keyExtractor={(item) => item._id}
+          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
+          renderItem={({ item }) => (
+            <Pressable
+              onPress={() => {
+                if (!paymentFound) {
+                  Alert.alert("Access Denied", "Please complete your payment to access courses.");
+                  return;
+                }
+                router.push({
+                  pathname: `/chapters/[id]`,
+                  params: { id: item._id, heading: item.name },
+                });
+              }}
+            >
+              <View style={styles.courseWrapper}>
+                <Image source={{ uri: item.images[0] }} style={styles.courseImage} />
+                {/* Show lock overlay only if payment is not found */}
+                {!paymentFound && (
+                  <View style={styles.lockOverlay}>
+                    <Ionicons name="lock-closed" size={24} color="#fff" />
+                  </View>
+                )}
+                <View style={styles.overlay}>
+                  <Text style={styles.courseName}>{item.name}</Text>
+                  <Text style={styles.category}>{item.category}</Text>
+                </View>
+              </View>
+            </Pressable>
+          )}
+          // Adding a footer component that occupies 150 units of space
+          ListFooterComponent={<View style={{ height: 100 }} />}
+        />
+      </View>
     </DrawerWithHeader>
   );
 };
@@ -288,6 +297,9 @@ const styles = StyleSheet.create({
   category: {
     fontSize: 14,
     color: theme.secondary,
+  },
+  contentContainer: {
+    flex: 1,
   },
 });
 

@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { View, Text, StyleSheet, Image, ActivityIndicator, TouchableOpacity, Linking } from 'react-native';
+import { View, Text, StyleSheet, Image, TouchableOpacity, Linking } from 'react-native';
 import axios from 'axios';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
@@ -56,15 +56,13 @@ export default function ItemDetail() {
   };
 
   if (loading) {
-    return (
-      <Loading />
-    );
+    return <Loading />;
   }
 
   if (error) {
     return (
       <View style={styles.centered}>
-        <Text>{error}</Text>
+        <Text style={styles.errorText}>{error}</Text>
       </View>
     );
   }
@@ -74,7 +72,15 @@ export default function ItemDetail() {
       {item && (
         <>
           {/* Image Carousel */}
-          <Swiper style={styles.wrapper} showsButtons={false} autoplay={true} autoplayTimeout={7} showsPagination={false}>
+          <Swiper
+            style={styles.wrapper}
+            showsButtons={false}
+            autoplay={true}
+            autoplayTimeout={5}
+            showsPagination={false}
+            dotStyle={styles.dot}
+            activeDotStyle={styles.activeDot}
+          >
             {item.images.map((image, index) => (
               <View key={index} style={styles.slide}>
                 <Image source={{ uri: image }} style={styles.image} />
@@ -82,22 +88,24 @@ export default function ItemDetail() {
             ))}
           </Swiper>
 
-          <View style={styles.content}>
-            <View style={styles.buttons}>
-              <TouchableOpacity style={styles.button} onPress={handleCallPress}>
-                <Ionicons name="call-outline" size={25} color="white" />
-                <Text style={styles.buttonText}>Telephone</Text>
-              </TouchableOpacity>
-              <TouchableOpacity style={styles.button} onPress={handleWhatsappPress}>
-                <Ionicons name="logo-whatsapp" size={25} color="white" />
-                <Text style={styles.buttonText}>Whatsapp</Text>
-              </TouchableOpacity>
-            </View>
-            <View style={styles.infoRow}>
-              <Text style={styles.name}>{item.name}</Text>
-              <Text style={styles.price}>XAF {item.price}</Text>
+          <View style={styles.card}>
+            <View style={styles.header}>
+              <Text style={styles.itemName}>{item.name}</Text>
+              <Text style={styles.itemPrice}>XAF {item.price}</Text>
             </View>
             <Text style={styles.description}>{item.description}</Text>
+            <Text style={styles.description}>Based on our privacy policy, purchasing an item requires that you contact the individual via third party means. FICEDU would not be held accountable for any decissions you make concerning your transactions</Text>
+            <View style={styles.divider} />
+            <View style={styles.actions}>
+              <TouchableOpacity style={styles.actionButton} onPress={handleCallPress}>
+                <Ionicons name="call" size={20} color="#007AFF" />
+                <Text style={styles.actionText}>Call</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={styles.actionButton} onPress={handleWhatsappPress}>
+                <Ionicons name="logo-whatsapp" size={20} color="#25D366" />
+                <Text style={styles.actionText}>WhatsApp</Text>
+              </TouchableOpacity>
+            </View>
           </View>
         </>
       )}
@@ -108,11 +116,10 @@ export default function ItemDetail() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#F9F9F9',
+    backgroundColor: '#F2F2F7',
   },
   wrapper: {
-    height: 320, // Remove any space above the image by setting this directly to the image's height
-    marginTop: 0, // Ensure no top margin or padding
+    height: 320, // Keeps the image carousel height intact
   },
   slide: {
     flex: 1,
@@ -120,58 +127,85 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   image: {
-    width: '100%',
+    width: '100%', // Do not modify horizontal padding or margins
     height: 400,
     resizeMode: 'cover',
   },
-  content: {
-    padding: 10,
+  card: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 14,
+    marginHorizontal: 15,
+    marginTop: -30,
+    padding: 20,
+    // iOS shadow
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.1,
+    shadowRadius: 6,
+    // Android shadow
+    elevation: 2,
   },
-  buttons: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-  },
-  button: {
-    backgroundColor: '#575757',
-    paddingHorizontal: 20,
-    paddingVertical: 15,
-    flexDirection: 'row',
-    borderRadius: 7,
-  },
-  buttonText: {
-    fontSize: 16,
-    fontWeight: '700',
-    marginLeft: 15,
-    color: '#D8C9AE',
-  },
-  infoRow: {
+  header: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginTop: 20,
+    marginBottom: 12,
   },
-  name: {
-    fontSize: 20,
+  itemName: {
+    fontSize: 24,
     fontWeight: '600',
-    marginTop: 10,
-    color: '#575757',
+    color: '#1C1C1E',
   },
-  price: {
-    fontSize: 20,
-    color: '#575757',
-    marginTop: 10,
-    width: 105,
-    fontWeight: '400',
+  itemPrice: {
+    fontSize: 22,
+    fontWeight: '500',
+    color: '#1C1C1E',
   },
   description: {
     fontSize: 16,
-    color: '#4A4A4A',
-    marginTop: 15,
-    lineHeight: 24,
+    color: '#3C3C43',
+    lineHeight: 22,
+    marginBottom: 15,
+  },
+  divider: {
+    height: 1,
+    backgroundColor: '#C7C7CC',
+    marginVertical: 15,
+  },
+  actions: {
+    flexDirection: 'row',
+    justifyContent: 'space-around',
+  },
+  actionButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  actionText: {
+    fontSize: 16,
+    color: '#007AFF',
+    marginLeft: 8,
+  },
+  dot: {
+    backgroundColor: 'rgba(0,0,0,0.2)',
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    marginHorizontal: 3,
+  },
+  activeDot: {
+    backgroundColor: '#007AFF',
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    marginHorizontal: 3,
   },
   centered: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
+  },
+  errorText: {
+    color: '#D32F2F',
+    fontSize: 16,
   },
 });
