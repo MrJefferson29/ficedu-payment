@@ -16,6 +16,7 @@ import { AuthContext } from './Contexts/AuthContext';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import * as Clipboard from 'expo-clipboard';
+import Loading from './loading';
 
 const Profile = () => {
   const { userToken } = useContext(AuthContext);
@@ -98,6 +99,7 @@ const Profile = () => {
       const data = await response.json();
       Alert.alert('Success', 'Profile updated successfully');
       setProfileData(data.updatedData);
+      router.push('/')
     } catch (error) {
       Alert.alert('Error', error.message);
     } finally {
@@ -113,9 +115,7 @@ const Profile = () => {
 
   if (isLoading) {
     return (
-      <View style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color="#0000ff" />
-      </View>
+      <Loading />
     );
   }
 

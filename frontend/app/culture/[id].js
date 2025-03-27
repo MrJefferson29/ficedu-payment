@@ -4,6 +4,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { Video } from 'expo-av';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import axios from 'axios';
+import Loading from '../loading';
 
 const DetailScreen = () => {
   const router = useRouter();
@@ -56,9 +57,7 @@ const DetailScreen = () => {
 
   if (loading) {
     return (
-      <View style={styles.centered}>
-        <ActivityIndicator size="large" color="#0000ff" />
-      </View>
+      <Loading />
     );
   }
 

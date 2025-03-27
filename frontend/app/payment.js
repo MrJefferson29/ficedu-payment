@@ -10,6 +10,7 @@ import {
 import * as WebBrowser from 'expo-web-browser';
 import { Picker } from '@react-native-picker/picker';
 import { AuthContext } from './Contexts/AuthContext';
+import Loading from './loading';
 
 const Payment = () => {
   const { userToken } = useContext(AuthContext);
@@ -48,11 +49,11 @@ const Payment = () => {
   const getAmountByDescription = (desc) => {
     switch (desc) {
       case 'RELEVANT SKILL':
-        return 30000;
+        return 60000;
       case 'TRAVEL ABROAD':
-        return 10000;
+        return 30000;
       case 'SELF DISCOVERY':
-        return 20000;
+        return 30000;
       default:
         return 0;
     }
@@ -102,7 +103,7 @@ const Payment = () => {
       </Text>
       <View style={styles.form}>
         <View style={styles.inputContainer}>
-          <Text style={styles.label}>Description</Text>
+          <Text style={styles.label}>SELECT THE COURSE</Text>
           <View style={styles.pickerContainer}>
             <Picker
               selectedValue={description}
@@ -122,7 +123,7 @@ const Payment = () => {
           activeOpacity={0.8}
         >
           {loading ? (
-            <ActivityIndicator size="large" color="#fff" />
+            <Loading />
           ) : (
             <Text style={styles.buttonText}>Pay Now</Text>
           )}

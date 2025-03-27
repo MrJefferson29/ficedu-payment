@@ -15,8 +15,9 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import axios from 'axios';
 import { Video } from 'expo-av';
 import * as ImagePicker from 'expo-image-picker';
+import Loading from './loading';
 
-const API_URL = process.env.API_URL || 'http://192.168.86.1:5000';
+const API_URL = process.env.API_URL || 'http://192.168.121.1:5000';
 
 const Travel = () => {
   const [chapters, setChapters] = useState([]);
@@ -162,9 +163,7 @@ const Travel = () => {
   const renderChapterList = () => {
     if (loading) {
       return (
-        <View style={styles.center}>
-          <ActivityIndicator size="large" color="#EC5252" />
-        </View>
+        <Loading />
       );
     }
     if (error) {

@@ -17,6 +17,7 @@ import { useRouter } from "expo-router";
 import { DrawerLayoutAndroid } from "react-native-gesture-handler";
 import { Ionicons } from "@expo/vector-icons";
 import { AuthContext } from "../Contexts/AuthContext"; // Adjust path if needed
+import Loading from "../loading";
 
 const Skills = () => {
   // Retrieve both userToken and userEmail from AuthContext
@@ -55,7 +56,7 @@ const Skills = () => {
       }
     } catch (error) {
       console.error("Error checking payment status:", error);
-      Alert.alert("Error", "Unable to verify payment status.");
+      Alert.alert("Notice", "You haven't paid for this course yet, navigate to payment, and be sure to set Course to 'RELEVANT SKILLS'");
       setPaymentFound(false);
     }
   };
@@ -120,9 +121,7 @@ const Skills = () => {
 
   if (loading) {
     return (
-      <View style={styles.center}>
-        <ActivityIndicator size="large" color={theme.primary} />
-      </View>
+      <Loading />
     );
   }
 
@@ -145,7 +144,7 @@ const Skills = () => {
           })}>
             <View style={styles.bannerContent}>
               <Text style={styles.bannerTitle}>Access All Courses</Text>
-              <Text style={styles.bannerPrice}>30,000 XAF</Text>
+              <Text style={styles.bannerPrice}>60,000 XAF</Text>
             </View>
           </TouchableOpacity>
         </View>

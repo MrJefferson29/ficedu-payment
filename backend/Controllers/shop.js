@@ -12,7 +12,7 @@ const addItem = async (req, res) => {
       price,
       description,
       category,
-      author : req.user ? req.user._id : null,
+      author: req.user ? req.user._id : null, // Author is the current logged-in user
       images: imagePaths,
     });
 
@@ -28,7 +28,7 @@ const addItem = async (req, res) => {
 // Fetch all items Controller
 const getAllItems = async (req, res) => {
   try {
-    const items = await Item.find(); // Retrieve all items from the database
+    const items = await Item.find().populate('author'); // Populate the author field
     res.status(200).json({ data: items });
   } catch (error) {
     res.status(500).json({ message: error.message });
@@ -39,7 +39,7 @@ const getAllItems = async (req, res) => {
 const getItemById = async (req, res) => {
   try {
     const { id } = req.params;
-    const item = await Item.findById(id); // Retrieve item by ID
+    const item = await Item.findById(id).populate('author'); // Populate the author field
 
     if (!item) {
       return res.status(404).json({ message: 'Item not found' });
@@ -55,7 +55,7 @@ const getItemById = async (req, res) => {
 const updateItem = async (req, res) => {
   try {
     const { id } = req.params;
-    const { name, price, description, replaceImages } = req.body; // `replaceImages` is optional
+    const { name, price, description, category, replaceImages } = req.body;
     const newImagePaths = req.files ? req.files.map(file => file.path) : [];
 
     const item = await Item.findById(id);
@@ -67,7 +67,7 @@ const updateItem = async (req, res) => {
     item.name = name || item.name;
     item.price = price || item.price;
     item.description = description || item.description;
-    item.category = category || item.category;
+    item.category = category || item.category;  // Ensure category gets updated if provided
 
     if (replaceImages === 'true') {
       // Replace all existing images with new ones
@@ -87,7 +87,6 @@ const updateItem = async (req, res) => {
     res.status(500).json({ message: error.message });
   }
 };
-
 
 // Delete an item by ID Controller
 const deleteItem = async (req, res) => {

@@ -4,6 +4,7 @@ import { Ionicons } from '@expo/vector-icons';
 import axios from 'axios';
 import { useRouter } from 'expo-router';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import Loading from '../loading';
 
 export default function Shop() {
     const [selectedImages, setSelectedImages] = useState([]);
@@ -67,9 +68,7 @@ export default function Shop() {
 
     if (loading) {
         return (
-            <View style={styles.centered}>
-                <ActivityIndicator size="large" color="#0000ff" />
-            </View>
+            <Loading />
         );
     }
 

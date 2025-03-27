@@ -12,6 +12,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { Video } from 'expo-av';
 import { useLocalSearchParams } from 'expo-router';
 import axios from 'axios';
+import Loading from '../loading';
 
 const API_URL = process.env.API_URL || 'http://192.168.121.1:5000';
 const { width } = Dimensions.get('window');
@@ -52,9 +53,7 @@ const VideoDetails = () => {
 
   if (loading) {
     return (
-      <View style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color="#00aced" />
-      </View>
+      <Loading />
     );
   }
 
