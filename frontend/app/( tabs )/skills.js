@@ -139,7 +139,10 @@ const Skills = () => {
       {/* Render payment banner if no matching payment is found */}
       {!paymentFound && (
         <View style={styles.bannerBox}>
-          <TouchableOpacity onPress={() => router.push("/payment")}>
+          <TouchableOpacity onPress={() => router.push({
+            pathname: "/payment",
+            params: {description: 'RELEVANT SKILLS'}
+          })}>
             <View style={styles.bannerContent}>
               <Text style={styles.bannerTitle}>Access All Courses</Text>
               <Text style={styles.bannerPrice}>30,000 XAF</Text>
@@ -161,7 +164,7 @@ const Skills = () => {
                 return;
               }
               router.push({
-                pathname: `/videos/[id]`,
+                pathname: `/chapters/[id]`,
                 params: { id: item._id, heading: item.name },
               });
             }}

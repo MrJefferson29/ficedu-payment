@@ -1,28 +1,30 @@
-const Courses = require('../Models/courses')
-const express = require('express')
-const asyncErrorWrapper = require('express-async-handler')
+const Courses = require('../Models/courses');
+const express = require('express');
+const asyncErrorWrapper = require('express-async-handler');
 
 const createCourse = asyncErrorWrapper(async (req, res, next) => {
     const { name, price, category } = req.body;
     const imagePaths = req.files.map(file => file.path);
 
     try {
-        const newCourse = await Courses.create({ name, price, category, images: imagePaths, });
+        // Note: If you want to add chapters during course creation,
+        // you can add them to the object below.
+        const newCourse = await Courses.create({ name, price, category, images: imagePaths });
         res.status(201).json({
             success: true,
             message: "Course created successfully",
             data: newCourse
         });
     } catch (error) {
-        next(error); // Pass the error to the global error handler
+        next(error);
     }
 });
 
 const getAllCourses = asyncErrorWrapper(async (req, res, next) => {
   try {
       const excludedIds = ["67a5fd5cf376cb2608d8fa35", "67a5fb4ff376cb2608d8fa33"];
+      // You might also want to populate chapters if needed:
       const courses = await Courses.find({ _id: { $nin: excludedIds } });
-
       res.status(200).json({
           success: true,
           data: courses
@@ -31,7 +33,6 @@ const getAllCourses = asyncErrorWrapper(async (req, res, next) => {
       next(error);
   }
 });
-
 
 const updateCourse = asyncErrorWrapper(async (req, res, next) => {
     try {
@@ -66,11 +67,16 @@ const updateCourse = asyncErrorWrapper(async (req, res, next) => {
       } catch (error) {
         res.status(500).json({ message: error.message });
       }
-})
+});
+
 const getCourseById = asyncErrorWrapper(async (req, res, next) => {
   const { id } = req.params;
   try {
-      const course = await Courses.findById(id);
+      // If your Courses schema now includes chapters, populate them and their videos
+      const course = await Courses.findById(id).populate({
+          path: 'chapters',
+          populate: { path: 'videos' }
+      });
       if (!course) {
           return res.status(404).json({ message: 'Course not found' });
       }
@@ -83,5 +89,4 @@ const getCourseById = asyncErrorWrapper(async (req, res, next) => {
   }
 });
 
-
-module.exports = {createCourse, getAllCourses, getCourseById, updateCourse};
+module.exports = { createCourse, getAllCourses, getCourseById, updateCourse };

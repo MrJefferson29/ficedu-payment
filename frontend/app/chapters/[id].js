@@ -16,9 +16,10 @@ import axios from 'axios';
 import { Video } from 'expo-av';
 import * as ImagePicker from 'expo-image-picker';
 
-const API_URL = process.env.API_URL || 'http://192.168.86.1:5000';
+const API_URL = process.env.API_URL || 'http://192.168.121.1:5000';
 
-const Travel = () => {
+const ChapterList = () => {
+  const { id, heading } = useLocalSearchParams();
   const [chapters, setChapters] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -29,8 +30,6 @@ const Travel = () => {
   // Each value will include title, description and file (object from ImagePicker)
   const [newVideoInputs, setNewVideoInputs] = useState({});
   const router = useRouter();
-  const id=`67a5fd5cf376cb2608d8fa35`;
-  const heading = 'Travel Abroad'
 
   useEffect(() => {
     fetchChapters();
@@ -419,4 +418,4 @@ const styles = StyleSheet.create({
   },
 });
 
-export default Travel;
+export default ChapterList;

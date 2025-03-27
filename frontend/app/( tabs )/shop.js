@@ -131,8 +131,8 @@ export default function Shop() {
                             <Text style={styles.name}>{item.name}</Text>
                             <Text style={styles.price}>XAF {item.price}</Text>
                             <View style={styles.icon}>
-                                <Text style={styles.likes}>5</Text>
-                                <Ionicons name="heart-outline" size={20} color="black" />
+                                <Text style={styles.likes}></Text>
+                                <Ionicons name="heart-outline" size={20} color="lightblue" />
                             </View>
                         </TouchableOpacity>
                     )}

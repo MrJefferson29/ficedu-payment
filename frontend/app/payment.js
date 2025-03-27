@@ -2,8 +2,7 @@ import React, { useState, useContext, useEffect } from 'react';
 import { 
   View, 
   Text, 
-  TextInput, 
-  Button, 
+  TouchableOpacity, 
   ActivityIndicator, 
   Alert, 
   StyleSheet 
@@ -13,19 +12,15 @@ import { Picker } from '@react-native-picker/picker';
 import { AuthContext } from './Contexts/AuthContext';
 
 const Payment = () => {
-  const { userToken } = useContext(AuthContext); // Using userToken from AuthContext for authorization
+  const { userToken } = useContext(AuthContext);
   const [loading, setLoading] = useState(false);
-  const [profileEmail, setProfileEmail] = useState(''); // New state to store fetched email
-  const [amount, setAmount] = useState('');
-  const [mobileWalletNumber, setMobileWalletNumber] = useState('');
-  const [description, setDescription] = useState('Relevant Skills'); // Default selection
+  const [profileEmail, setProfileEmail] = useState('');
+  const [description, setDescription] = useState('RELEVANT SKILL'); // Default selection
 
   // Fetch user profile to get the email
   useEffect(() => {
     const fetchProfile = async () => {
-      if (!userToken) {
-        return;
-      }
+      if (!userToken) return;
       try {
         const response = await fetch('https://ficedu.onrender.com/user/profile', {
           method: 'POST',
@@ -40,7 +35,6 @@ const Payment = () => {
         }
 
         const data = await response.json();
-        // Update the email from the fetched profile data
         setProfileEmail(data.data.email);
       } catch (error) {
         Alert.alert('Error', error.message);
@@ -50,10 +44,26 @@ const Payment = () => {
     fetchProfile();
   }, [userToken]);
 
+  // Calculate amount based on description
+  const getAmountByDescription = (desc) => {
+    switch (desc) {
+      case 'RELEVANT SKILL':
+        return 30000;
+      case 'TRAVEL ABROAD':
+        return 10000;
+      case 'SELF DISCOVERY':
+        return 20000;
+      default:
+        return 0;
+    }
+  };
+
+  const amount = getAmountByDescription(description);
+  const mobileWalletNumber = 237654711169; // Hardcoded
+
   const initiatePayment = async () => {
-    // Basic form validation
-    if (!amount || !mobileWalletNumber || !description) {
-      Alert.alert('Error', 'Please fill out all fields.');
+    if (!description || !profileEmail) {
+      Alert.alert('Error', 'Please ensure all fields are filled.');
       return;
     }
 
@@ -63,25 +73,22 @@ const Payment = () => {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          amount: parseInt(amount), // Ensure the amount is a number
+          amount,
           mobileWalletNumber,
           description,
-          email: profileEmail || 'default@example.com', // Use fetched email
+          email: profileEmail || 'default@example.com',
         }),
       });
       
       const data = await response.json();
 
-      if (response.ok) {
-        if (data.paymentUrl) {
-          await WebBrowser.openBrowserAsync(data.paymentUrl);
-        } else {
-          Alert.alert('Error', 'Payment URL was not provided by the server.');
-        }
+      if (response.ok && data.paymentUrl) {
+        await WebBrowser.openBrowserAsync(data.paymentUrl);
       } else {
         Alert.alert('Error', data.error || 'Payment processing failed.');
       }
     } catch (error) {
+      console.error(error);
       Alert.alert('Error', error.message);
     } finally {
       setLoading(false);
@@ -90,28 +97,10 @@ const Payment = () => {
 
   return (
     <View style={styles.container}>
-      <Text style={styles.title}>Make a Payment</Text>
+      <Text style={styles.title}>
+        Make a Payment of {amount.toLocaleString()} XAF
+      </Text>
       <View style={styles.form}>
-        <View style={styles.inputContainer}>
-          <Text style={styles.label}>Amount</Text>
-          <TextInput
-            style={styles.input}
-            placeholder="Enter amount"
-            keyboardType="numeric"
-            value={amount}
-            onChangeText={setAmount}
-          />
-        </View>
-        <View style={styles.inputContainer}>
-          <Text style={styles.label}>Mobile Wallet Number</Text>
-          <TextInput
-            style={styles.input}
-            placeholder="Enter mobile wallet number"
-            keyboardType="phone-pad"
-            value={mobileWalletNumber}
-            onChangeText={setMobileWalletNumber}
-          />
-        </View>
         <View style={styles.inputContainer}>
           <Text style={styles.label}>Description</Text>
           <View style={styles.pickerContainer}>
@@ -127,19 +116,17 @@ const Payment = () => {
             </Picker>
           </View>
         </View>
-        <View style={styles.inputContainer}>
-          <Text style={styles.label}>Email</Text>
-          <Text style={styles.emailDisplay}>
-            {profileEmail || 'Loading email...'}
-          </Text>
-        </View>
-        <View style={styles.buttonContainer}>
+        <TouchableOpacity 
+          style={styles.buttonContainer} 
+          onPress={initiatePayment}
+          activeOpacity={0.8}
+        >
           {loading ? (
-            <ActivityIndicator size="large" color="#ffffff" />
+            <ActivityIndicator size="large" color="#fff" />
           ) : (
-            <Button title="Pay Now" onPress={initiatePayment} color="#ffffff" />
+            <Text style={styles.buttonText}>Pay Now</Text>
           )}
-        </View>
+        </TouchableOpacity>
       </View>
     </View>
   );
@@ -148,47 +135,40 @@ const Payment = () => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#f0f2f5',
+    backgroundColor: '#eef2f3', // A soft background color for a clean look
     padding: 20,
     justifyContent: 'center',
   },
   title: {
-    fontSize: 26,
-    fontWeight: '600',
-    marginBottom: 20,
+    fontSize: 28,
+    fontWeight: '700',
+    marginBottom: 25,
     textAlign: 'center',
     color: '#333',
   },
   form: {
-    backgroundColor: '#ffffff',
-    borderRadius: 8,
-    padding: 20,
-    elevation: 3,
+    backgroundColor: '#fff',
+    borderRadius: 12,
+    padding: 25,
+    elevation: 5,
     shadowColor: '#000',
-    shadowOpacity: 0.1,
-    shadowRadius: 10,
-    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.15,
+    shadowRadius: 8,
+    shadowOffset: { width: 0, height: 4 },
   },
   inputContainer: {
-    marginBottom: 15,
+    marginBottom: 20,
   },
   label: {
-    fontSize: 16,
-    marginBottom: 5,
+    fontSize: 18,
+    marginBottom: 8,
     color: '#555',
-  },
-  input: {
-    borderWidth: 1,
-    borderColor: '#ddd',
-    paddingHorizontal: 10,
-    paddingVertical: 8,
-    borderRadius: 4,
-    fontSize: 16,
   },
   pickerContainer: {
     borderWidth: 1,
-    borderColor: '#ddd',
-    borderRadius: 4,
+    borderColor: '#ccc',
+    borderRadius: 6,
+    overflow: 'hidden',
   },
   picker: {
     height: 50,
@@ -197,16 +177,18 @@ const styles = StyleSheet.create({
   pickerItem: {
     fontSize: 16,
   },
-  emailDisplay: {
-    fontSize: 16,
-    color: '#333',
-    paddingVertical: 8,
-  },
   buttonContainer: {
     backgroundColor: '#4a90e2',
-    borderRadius: 4,
-    overflow: 'hidden',
+    borderRadius: 8,
+    paddingVertical: 15,
+    alignItems: 'center',
+    justifyContent: 'center',
     marginTop: 10,
+  },
+  buttonText: {
+    color: '#fff',
+    fontSize: 18,
+    fontWeight: '600',
   },
 });
 

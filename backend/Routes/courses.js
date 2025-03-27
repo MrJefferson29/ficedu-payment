@@ -1,4 +1,6 @@
 const { createCourse, getAllCourses, updateCourse, getCourseById } = require('../Controllers/courses');
+const { createChapter, getChapterById, updateChapter, getAllChapters } = require('../Controllers/chapter');
+const { createVideo, getVideoById, updateVideo } = require('../Controllers/video');
 const multer = require('multer');
 const { CloudinaryStorage } = require('multer-storage-cloudinary');
 const cloudinary = require('./cloudinary');
@@ -27,9 +29,27 @@ const upload = multer({
   }
 });
 
+// --------------------
+// Course Routes
+// --------------------
 router.post('/create', upload.array('images', 5), createCourse);
 router.post('/get-all', getAllCourses);
 router.get('/:id', getCourseById);
 router.put('/:id/update', upload.array('images', 5), updateCourse);
+
+// --------------------
+// Chapter Routes
+// --------------------
+router.post('/:courseId/create-chapter', createChapter);
+router.get('/chapter/:id', getChapterById);
+router.put('/chapter/:id', updateChapter);
+router.get('/all-chapters/:courseId', getAllChapters)
+
+// --------------------
+// Video Routes
+// --------------------
+router.post('/:chapterId/create-video', createVideo);
+router.get('/video/:id', getVideoById);
+router.put('/video/:id', updateVideo);
 
 module.exports = router;

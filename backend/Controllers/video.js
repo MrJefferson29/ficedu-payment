@@ -1,123 +1,126 @@
-const express = require('express');
 const Video = require('../Models/video');
+const Chapter = require('../Models/chapter');
 const asyncErrorWrapper = require('express-async-handler');
-const Courses = require('../Models/courses');
+const cloudinary = require('../Routes/cloudinary');
+const fs = require('fs');
 
-const addVideo = asyncErrorWrapper(async (req, res, next) => {
+// Allowed video formats
+const allowedFormats = ['video/mp4', 'video/avi', 'video/quicktime'];
+
+// Create a new video and associate it with a chapter
+const createVideo = asyncErrorWrapper(async (req, res, next) => {
+  console.log('req.files:', req.files);
+  const { title, description } = req.body;
+  const { chapterId } = req.params; // Now using chapterId
+
+  // Check if file is uploaded
+  if (!req.files || !req.files.video) {
+      return res.status(400).json({ success: false, message: 'No video file uploaded' });
+  }
+
+  const videoFile = req.files.video;
+
+  // Validate file MIME type
+  if (!allowedFormats.includes(videoFile.mimetype)) {
+      return res.status(400).json({ success: false, message: 'Invalid video format' });
+  }
+
+  // Validate that the chapter exists, since the Video model requires it
+  if (!chapterId) {
+      return res.status(400).json({ success: false, message: 'Chapter ID is required' });
+  }
+  const chapter = await Chapter.findById(chapterId);
+  if (!chapter) {
+      return res.status(404).json({ success: false, message: 'Chapter not found' });
+  }
+
+  try {
+      // Upload video to Cloudinary
+      const uploadResult = await cloudinary.uploader.upload(videoFile.tempFilePath, {
+          resource_type: 'video',
+          folder: 'videos',
+          public_id: `video_${Date.now()}`
+      });
+
+      // Remove the temporary file after upload
+      fs.unlinkSync(videoFile.tempFilePath);
+
+      // Create a new video document with the valid chapter reference
+      const newVideo = await Video.create({
+          title,
+          description,
+          videoUrl: uploadResult.secure_url,
+          public_id: uploadResult.public_id,
+          chapter: chapterId  // Use the chapterId parameter
+      });
+
+      // Associate the video with the chapter
+      chapter.videos.push(newVideo._id);
+      await chapter.save();
+
+      res.status(201).json({ success: true, message: "Video uploaded successfully", data: newVideo });
+  } catch (error) {
+      res.status(500).json({ success: false, message: 'Error uploading video', error: error.message });
+  }
+});
+
+// Get all videos
+const getAllVideos = asyncErrorWrapper(async (req, res, next) => {
     try {
-        const { chapter, content, title } = req.body;
-        const filePath = req.file ? req.file.path : null; // Extract single file path
-        const { id } = req.params; // Extract course ID
-
-        if (!filePath) {
-            return res.status(400).json({ success: false, message: "No video file uploaded" });
-        }
-
-        // Find the course
-        const course = await Courses.findById(id);
-        if (!course) {
-            return res.status(404).json({ success: false, message: 'Course not found' });
-        }
-
-        // Check if a video object already exists for this course and chapter
-        let video = await Video.findOne({ course: id, chapter });
-
-        if (video) {
-            // If video object exists, append new video to the videos array
-            video.videos.push({ file: filePath, title });
-        } else {
-            // Otherwise, create a new video entry
-            video = await Video.create({ 
-                course: course._id, 
-                chapter, 
-                content, 
-                videos: [{ file: filePath, title }]
-            });
-
-            // Push the new video ID into the course's vids array
-            course.vids.push(video._id);
-            await course.save();
-        }
-
-        await video.save();
-
-        return res.status(201).json({
-            success: true,
-            data: video,
-        });
+        const videos = await Video.find();
+        res.status(200).json({ success: true, data: videos });
     } catch (error) {
-        next(error);
+        res.status(500).json({ success: false, message: 'Error fetching videos', error: error.message });
     }
 });
 
-const getVideosByCourse = asyncErrorWrapper(async (req, res, next) => {
-    try {
-        const { courseId } = req.params;
-
-        // Fetch videos and structure response
-        const videos = await Video.find({ course: courseId }).select('chapter content videos');
-
-        if (!videos.length) {
-            return res.status(404).json({
-                success: false,
-                message: "No videos found for this course",
-            });
-        }
-
-        res.status(200).json({
-            success: true,
-            data: videos,
-        });
-    } catch (error) {
-        next(error);
+// Get a single video by ID
+const getVideoById = asyncErrorWrapper(async (req, res, next) => {
+    const { id } = req.params;
+    const video = await Video.findById(id);
+    if (!video) {
+        return res.status(404).json({ success: false, message: 'Video not found' });
     }
+    res.status(200).json({ success: true, data: video });
 });
 
-const getVideoDetails = asyncErrorWrapper(async (req, res, next) => {
-    const { id } = req.params;  // Get video ID from the URL parameters
-    try {
-        const video = await Video.findById(id).populate('course');  // Populate course if you want course info too
-        if (!video) {
-            return res.status(404).json({ success: false, message: 'Video not found' });
-        }
-        res.status(200).json({
-            success: true,
-            data: video,
-        });
-    } catch (error) {
-        next(error);
-    }
-});
-
+// Update a video
 const updateVideo = asyncErrorWrapper(async (req, res, next) => {
+    const { id } = req.params;
+    const { title, description } = req.body;
+
+    const video = await Video.findById(id);
+    if (!video) {
+        return res.status(404).json({ success: false, message: 'Video not found' });
+    }
+
+    video.title = title || video.title;
+    video.description = description || video.description;
+
+    await video.save();
+    res.status(200).json({ success: true, message: 'Video updated successfully', data: video });
+});
+
+// Delete a video (from Cloudinary & DB)
+const deleteVideo = asyncErrorWrapper(async (req, res, next) => {
+    const { id } = req.params;
+
+    const video = await Video.findById(id);
+    if (!video) {
+        return res.status(404).json({ success: false, message: 'Video not found' });
+    }
+
     try {
-        const { id } = req.params;
-        const filePath = req.file ? req.file.path : null;
-        const { title } = req.body;
+        // Delete the video from Cloudinary
+        await cloudinary.uploader.destroy(video.public_id);
 
-        if (!filePath) {
-            return res.status(400).json({ success: false, message: "No video file uploaded" });
-        }
+        // Remove the video document from the database
+        await video.deleteOne();
 
-        // Find the video object
-        const video = await Video.findById(id);
-        if (!video) {
-            return res.status(404).json({ success: false, message: 'Video not found' });
-        }
-
-        // Add the new file & title to the videos array
-        video.videos.push({ file: filePath, title });
-
-        // Save the updated video object
-        await video.save();
-
-        return res.status(200).json({
-            success: true,
-            data: video,
-        });
+        res.status(200).json({ success: true, message: 'Video deleted successfully' });
     } catch (error) {
-        next(error);
+        res.status(500).json({ success: false, message: 'Error deleting video', error: error.message });
     }
 });
 
-module.exports = { addVideo, getVideosByCourse, getVideoDetails, updateVideo };
+module.exports = { createVideo, getAllVideos, getVideoById, updateVideo, deleteVideo };

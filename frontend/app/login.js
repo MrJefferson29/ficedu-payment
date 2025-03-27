@@ -14,7 +14,7 @@ export default function Login() {
     const handleLogin = async () => {
         try {
             console.log('Attempting login with:', email, password);
-            const response = await axios.post('http://192.168.196.1:5000/auth/login', {
+            const response = await axios.post('http://192.168.86.1:5000/auth/login', {
                 email,
                 password,
             });

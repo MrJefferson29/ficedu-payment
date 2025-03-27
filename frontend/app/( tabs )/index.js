@@ -1,21 +1,34 @@
-import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Linking, Alert, SafeAreaView, Button, Image } from 'react-native';
+import React, { useRef, useContext } from 'react';
+import { 
+  View, 
+  Text, 
+  StyleSheet, 
+  TouchableOpacity, 
+  ScrollView, 
+  Linking, 
+  Alert, 
+  SafeAreaView, 
+  Image 
+} from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { DrawerLayoutAndroid } from 'react-native-gesture-handler';
-import { useRef } from 'react';
 import Carousel from '../carousel';
 import Features from '../features';
-
-
+import axios from 'axios';
+import { AuthContext } from '../Contexts/AuthContext';
+import SocialFeed from '../features';
 
 export default function Index() {
-  const router = useRouter()
+  const router = useRouter();
+  const { userEmail } = useContext(AuthContext);
 
   const DrawerWithHeader = ({ children }) => {
     const drawerRef = useRef(null);
 
     const renderDrawerContent = () => (
       <View style={styles.drawerContent}>
+        {/* Add your drawer menu items here */}
       </View>
     );
 
@@ -57,6 +70,32 @@ export default function Index() {
     );
   };
 
+  // Handler for Travel Abroad button press
+  const handleTravelPress = async () => {
+    try {
+      // Make the API call with the user's email and description "TRAVEL ABROAD"
+      const response = await axios.post("https://ficedu-payment.onrender.com/process/get-payment", {
+        email: userEmail,
+        description: "TRAVEL ABROAD",
+      });
+
+      // If payment is found, navigate to travel; otherwise, go to payment
+      if (response.data && Array.isArray(response.data) && response.data.length > 0) {
+        router.push('/travel');
+      } else {
+        router.push({
+          pathname: "/payment",
+          params: { description: "TRAVEL ABROAD" },
+        });
+        
+      }
+    } catch (error) {
+      console.error("Error checking travel payment:", error);
+      Alert.alert("Error", "Unable to verify payment status.");
+      router.push('/payment');
+    }
+  };
+
   return (
     <DrawerWithHeader>
       <SafeAreaView style={{ flex: 1 }}>
@@ -77,7 +116,7 @@ export default function Index() {
               </TouchableOpacity>
               <TouchableOpacity
                 style={styles.card}
-                onPress={() => router.push('/travel')}
+                onPress={handleTravelPress}
               >
                 <Text style={styles.cardText}>Travel Abroad</Text>
                 <View style={styles.icon}>
@@ -110,7 +149,7 @@ export default function Index() {
           </View>
           <Text style={styles.heading}></Text>
           <View>
-            <Features />
+            {/* <SocialFeed /> */}
           </View>
         </ScrollView>
       </SafeAreaView>
@@ -221,7 +260,12 @@ const styles = StyleSheet.create({
   },
   headerSubtitle: {
     fontSize: 15,
-    fontWeight: '00',
+    fontWeight: '400',
     color: '#666666',
+  },
+  drawerContent: {
+    flex: 1,
+    backgroundColor: '#fff',
+    padding: 20,
   },
 });

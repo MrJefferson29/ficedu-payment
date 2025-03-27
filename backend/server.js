@@ -4,6 +4,7 @@ const cors = require("cors");
 const path = require("path");
 const mongoose = require("mongoose");
 const morgan = require("morgan");
+const fileUpload = require("express-fileupload"); // Added for file uploads
 const connectDatabase = require("./Controllers/connectDB");
 const IndexRoute = require("./Routes/index");
 
@@ -18,6 +19,13 @@ const app = express();
 app.use(express.json());
 app.use(cors());
 app.use(morgan("dev")); // Request logging
+
+// Configure express-fileupload middleware
+app.use(fileUpload({
+    useTempFiles: true,
+    tempFileDir: '/tmp/',
+    limits: { fileSize: 100 * 1024 * 1024 } // 100MB file size limit
+}));
 
 // Routes
 app.use("/", IndexRoute);
