@@ -23,7 +23,7 @@ const Payment = () => {
     const fetchProfile = async () => {
       if (!userToken) return;
       try {
-        const response = await fetch('https://ficedu.onrender.com/user/profile', {
+        const response = await fetch('https://ficedu-payment.onrender.com/user/profile', {
           method: 'POST',
           headers: {
             Authorization: `Bearer ${userToken}`,

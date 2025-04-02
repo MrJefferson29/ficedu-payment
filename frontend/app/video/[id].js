@@ -4,9 +4,9 @@ import {
   Text,
   StyleSheet,
   TouchableOpacity,
-  ActivityIndicator,
   Alert,
   Dimensions,
+  ScrollView,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { Video } from 'expo-av';
@@ -14,9 +14,10 @@ import { useLocalSearchParams } from 'expo-router';
 import axios from 'axios';
 import Loading from '../loading';
 
-const API_URL = process.env.API_URL || 'http://192.168.121.1:5000';
+const API_URL = process.env.API_URL || 'https://ficedu-payment.onrender.com';
 const { width } = Dimensions.get('window');
-const VIDEO_HEIGHT = width * 0.5625; // 16:9 ratio
+// Increase the video height by using a higher ratio (e.g., 0.75 for a 4:3 ratio look)
+const VIDEO_HEIGHT = width * 0.75;
 
 const VideoDetails = () => {
   const { id } = useLocalSearchParams();
@@ -52,9 +53,7 @@ const VideoDetails = () => {
   };
 
   if (loading) {
-    return (
-      <Loading />
-    );
+    return <Loading />;
   }
 
   if (!videoDetails) {
@@ -88,10 +87,11 @@ const VideoDetails = () => {
           )}
         </TouchableOpacity>
       </View>
-      <View style={styles.detailsContainer}>
+      <ScrollView style={styles.detailsContainer}>
         <Text style={styles.title}>{videoDetails.title}</Text>
+        <View style={styles.divider} />
         <Text style={styles.description}>{videoDetails.description}</Text>
-      </View>
+      </ScrollView>
     </View>
   );
 };
@@ -99,11 +99,11 @@ const VideoDetails = () => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#f0f2f5',
+    backgroundColor: '#000', // Immersive black background
   },
   loadingContainer: {
     flex: 1,
-    backgroundColor: '#f0f2f5',
+    backgroundColor: '#000',
     justifyContent: 'center',
     alignItems: 'center',
   },
@@ -124,34 +124,37 @@ const styles = StyleSheet.create({
   },
   controlButton: {
     position: 'absolute',
-    alignSelf: 'center',
-    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    // Center the icon both horizontally and vertically
+    top: '50%',
+    left: '50%',
+    transform: [{ translateX: -25 }, { translateY: -25 }], // Adjust based on half the size of the icon
+    backgroundColor: 'rgba(0, 0, 0, 0.7)',
     padding: 15,
     borderRadius: 50,
   },
   detailsContainer: {
     flex: 1,
     backgroundColor: '#fff',
-    marginTop: -20,
-    borderTopLeftRadius: 25,
-    borderTopRightRadius: 25,
-    padding: 25,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: -2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 8,
-    elevation: 5,
+    borderTopLeftRadius: 12,
+    borderTopRightRadius: 12,
+    padding: 16,
+    marginTop: -12, // Overlap slightly for a smooth transition
   },
   title: {
-    fontSize: 26,
-    fontWeight: '700',
-    color: '#333',
-    marginBottom: 15,
+    fontSize: 20,
+    fontWeight: '600',
+    color: '#000',
+    marginBottom: 8,
+  },
+  divider: {
+    height: 1,
+    backgroundColor: '#e0e0e0',
+    marginVertical: 8,
   },
   description: {
-    fontSize: 18,
-    color: '#666',
-    lineHeight: 26,
+    fontSize: 16,
+    color: '#333',
+    lineHeight: 22,
   },
   errorText: {
     fontSize: 20,

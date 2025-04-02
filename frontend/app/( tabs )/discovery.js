@@ -18,7 +18,7 @@ import * as ImagePicker from "expo-image-picker";
 import { AuthContext } from "../Contexts/AuthContext";
 import Loading from "../loading";
 
-const API_URL = process.env.API_URL || "http://192.168.121.1:5000";
+const API_URL = process.env.API_URL || "https://ficedu-payment.onrender.com";
 
 const Discovery = () => {
   const { userToken, userEmail } = useContext(AuthContext);

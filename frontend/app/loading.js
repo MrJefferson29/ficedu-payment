@@ -8,7 +8,7 @@ export default function Loading() {
   const spinValue = new Animated.Value(0);
   // Animated value for text fade-in
   const fadeAnim = new Animated.Value(0);
-  const [loadingText, setLoadingText] = useState("Please wait...");
+  const [loadingText, setLoadingText] = useState("Loading, Please wait...");
 
   useEffect(() => {
     // Continuous rotation animation

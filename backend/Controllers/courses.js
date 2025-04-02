@@ -3,22 +3,26 @@ const express = require('express');
 const asyncErrorWrapper = require('express-async-handler');
 
 const createCourse = asyncErrorWrapper(async (req, res, next) => {
+  try {
     const { name, price, category } = req.body;
-    const imagePaths = req.files.map(file => file.path);
-
-    try {
-        // Note: If you want to add chapters during course creation,
-        // you can add them to the object below.
-        const newCourse = await Courses.create({ name, price, category, images: imagePaths });
-        res.status(201).json({
-            success: true,
-            message: "Course created successfully",
-            data: newCourse
-        });
-    } catch (error) {
-        next(error);
+    
+    if (!req.files || req.files.length === 0) {
+      return res.status(400).json({ message: "No images uploaded" });
     }
+
+    const imagePaths = req.files.map(file => file.path);
+    const newCourse = await Courses.create({ name, price, category, images: imagePaths });
+
+    res.status(201).json({
+      success: true,
+      message: "Course created successfully",
+      data: newCourse
+    });
+  } catch (error) {
+    next(error);
+  }
 });
+
 
 const getAllCourses = asyncErrorWrapper(async (req, res, next) => {
   try {

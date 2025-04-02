@@ -67,7 +67,7 @@ const Skills = () => {
   // Fetch courses from the backend
   const fetchCourses = async () => {
     try {
-      const response = await axios.post("https://ficedu.onrender.com/courses/get-all");
+      const response = await axios.post("http://192.168.115.1:5000/courses/get-all");
       setCourses(response.data.data);
     } catch (err) {
       setError("Failed to load courses");

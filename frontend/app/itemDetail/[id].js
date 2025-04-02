@@ -21,7 +21,7 @@ export default function ItemDetail() {
   useEffect(() => {
     const fetchItemDetail = async () => {
       try {
-        const response = await axios.get(`http://192.168.121.1:5000/shop/${id}`);
+        const response = await axios.get(`https://ficedu-payment.onrender.com/shop/${id}`);
         const itemData = response.data.data;
         setItem(itemData);
         if (itemData.author) {

@@ -17,7 +17,7 @@ import { Video } from 'expo-av';
 import * as ImagePicker from 'expo-image-picker';
 import Loading from '../loading';
 
-const API_URL = process.env.API_URL || 'http://192.168.121.1:5000';
+const API_URL = process.env.API_URL || 'https://ficedu-payment.onrender.com';
 
 const ChapterList = () => {
   const { id, heading } = useLocalSearchParams();
@@ -206,7 +206,7 @@ const ChapterList = () => {
                   <Text style={styles.noVideos}>No videos available.</Text>
                 )}
                 {/* New Video Form */}
-                <View style={styles.newVideoForm}>
+                {/* <View style={styles.newVideoForm}>
                   <Text style={styles.formHeader}>Add New Video</Text>
                   <TextInput
                     style={styles.input}
@@ -246,7 +246,7 @@ const ChapterList = () => {
                   >
                     <Text style={styles.submitButtonText}>Create Video</Text>
                   </TouchableOpacity>
-                </View>
+                </View> */}
               </View>
             )}
           </View>
@@ -257,10 +257,10 @@ const ChapterList = () => {
 
   return (
     <ScrollView style={styles.container}>
-      <Text style={styles.header}>Chapters for {heading}</Text>
+      <Text style={styles.header}>VIDEOS FOR {heading}</Text>
       {renderChapterList()}
       {/* New Chapter Form */}
-      <View style={styles.newChapterForm}>
+      {/* <View style={styles.newChapterForm}>
         <Text style={styles.formHeader}>Add New Chapter</Text>
         <TextInput
           style={styles.input}
@@ -271,7 +271,7 @@ const ChapterList = () => {
         <TouchableOpacity style={styles.submitButton} onPress={handleCreateChapter}>
           <Text style={styles.submitButtonText}>Create Chapter</Text>
         </TouchableOpacity>
-      </View>
+      </View> */}
     </ScrollView>
   );
 };

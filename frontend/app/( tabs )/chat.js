@@ -77,7 +77,7 @@ const Chat = () => {
 
     try {
       // Note: Ensure that the URL matches your backend server address.
-      const response = await axios.post("http://192.168.121.1:5000/ai/generate", { prompt });
+      const response = await axios.post("https://ficedu-payment.onrender.com/ai/generate", { prompt });
       // Updated to use the "text" key from the backend
       const aiResponse = response.data.text || "Sorry, something went wrong.";
 

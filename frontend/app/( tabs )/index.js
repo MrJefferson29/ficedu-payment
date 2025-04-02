@@ -149,7 +149,7 @@ export default function Index() {
           </View>
           <Text style={styles.heading}></Text>
           <View>
-            {/* <SocialFeed /> */}
+            <SocialFeed />
           </View>
         </ScrollView>
       </SafeAreaView>

@@ -28,7 +28,7 @@ const SocialFeed = () => {
   // Fetch the complete list of items
   const fetchFeatures = async () => {
     try {
-      const response = await axios.get('https://ficedu.onrender.com/features/get-all');
+      const response = await axios.get('https://ficedu-payment.onrender.com/features/get-all');
       setFeatures(response.data);
     } catch (error) {
       setError('Error fetching features');
