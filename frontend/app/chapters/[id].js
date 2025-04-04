@@ -17,7 +17,7 @@ import { Video } from 'expo-av';
 import * as ImagePicker from 'expo-image-picker';
 import Loading from '../loading';
 
-const API_URL = process.env.API_URL || 'https://ficedu-payment.onrender.com';
+const API_URL = 'https://ficedu-payment.onrender.com';
 
 const ChapterList = () => {
   const { id, heading } = useLocalSearchParams();

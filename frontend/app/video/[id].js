@@ -14,7 +14,7 @@ import { useLocalSearchParams } from 'expo-router';
 import axios from 'axios';
 import Loading from '../loading';
 
-const API_URL = process.env.API_URL || 'https://ficedu-payment.onrender.com';
+const API_URL = 'https://ficedu-payment.onrender.com';
 const { width } = Dimensions.get('window');
 // Increase the video height by using a higher ratio (e.g., 0.75 for a 4:3 ratio look)
 const VIDEO_HEIGHT = width * 0.75;

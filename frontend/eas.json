@@ -15,7 +15,10 @@
       "autoIncrement": true,
       "android": {
         "buildType": "apk",
-        "image": "latest"
+        "image": "latest",
+        "env": {
+          "KOTLIN_VERSION": "1.9.25"
+        }
       }
     }
   },

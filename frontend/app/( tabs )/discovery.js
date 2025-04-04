@@ -18,7 +18,7 @@ import * as ImagePicker from "expo-image-picker";
 import { AuthContext } from "../Contexts/AuthContext";
 import Loading from "../loading";
 
-const API_URL = process.env.API_URL || "https://ficedu-payment.onrender.com";
+const API_URL = "https://ficedu-payment.onrender.com";
 
 const Discovery = () => {
   const { userToken, userEmail } = useContext(AuthContext);
@@ -268,7 +268,7 @@ const Discovery = () => {
                   <Text style={styles.noVideos}>No videos available.</Text>
                 )}
                 {/* New Video Form */}
-                <View style={styles.newVideoForm}>
+                {/* <View style={styles.newVideoForm}>
                   <Text style={styles.formHeader}>Add New Video</Text>
                   <TextInput
                     style={styles.input}
@@ -316,7 +316,7 @@ const Discovery = () => {
                   >
                     <Text style={styles.submitButtonText}>Create Video</Text>
                   </TouchableOpacity>
-                </View>
+                </View> */}
               </View>
             )}
           </View>
@@ -347,7 +347,7 @@ const Discovery = () => {
       )}
       {renderChapterList()}
       {/* New Chapter Form */}
-      <View style={styles.newChapterForm}>
+      {/* <View style={styles.newChapterForm}>
         <Text style={styles.formHeader}>Add New Chapter</Text>
         <TextInput
           style={styles.input}
@@ -361,7 +361,7 @@ const Discovery = () => {
         >
           <Text style={styles.submitButtonText}>Create Chapter</Text>
         </TouchableOpacity>
-      </View>
+      </View> */}
     </ScrollView>
   );
 };
